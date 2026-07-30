@@ -3,53 +3,61 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>本格テトリス (REN演出追加版)</title>
+    <title>Webぷよテト (オンライン対戦対応)</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
         body {
-            background-color: #222; color: #fff;
-            display: flex; flex-direction: column; align-items: center;
-            font-family: sans-serif; margin: 0; padding: 10px;
-            touch-action: none;
+            background-color: #222; color: #fff; display: flex; flex-direction: column; align-items: center;
+            font-family: sans-serif; margin: 0; padding: 10px; touch-action: none;
         }
-        #start-screen {
-            position: absolute; top: 20%; background: #111;
-            padding: 30px; border: 2px solid #555; border-radius: 10px;
-            text-align: center; z-index: 20; box-shadow: 0 0 20px rgba(0,0,0,0.8);
+        
+        .top-bar { display: flex; align-items: center; justify-content: space-between; width: 100%; max-width: 600px; margin-bottom: 10px; }
+        #status-msg { color: #ffeb3b; font-size: 16px; font-weight: bold; }
+        #btn-reset-top { background-color: #d32f2f; color: #fff; border: none; padding: 6px 12px; border-radius: 4px; font-size: 12px; font-weight: bold; cursor: pointer; }
+        #btn-reset-top:hover { background-color: #b71c1c; }
+
+        /* オーバーレイスクリーン */
+        .overlay-screen {
+            position: absolute; top: 20%; background: #111; padding: 30px; border: 2px solid #555;
+            border-radius: 10px; text-align: center; z-index: 20; box-shadow: 0 0 20px rgba(0,0,0,0.8);
         }
-        #start-screen button {
-            padding: 15px 30px; font-size: 18px; margin: 10px; cursor: pointer;
-            border-radius: 5px; font-weight: bold; border: none;
+        .overlay-screen button {
+            padding: 15px 30px; font-size: 18px; margin: 10px; cursor: pointer; border-radius: 5px; font-weight: bold; border: none;
         }
+        
+        #game-select-screen button { background-color: #9c27b0; color: white; width: 200px; display: block; margin: 15px auto; }
         #btn-solo { background-color: #4CAF50; color: white; }
         #btn-multi { background-color: #2196F3; color: white; }
+        
         #multi-login { display: none; margin-top: 20px; }
         #multi-login input { padding: 10px; font-size: 16px; width: 180px; }
         #multi-login button { padding: 10px 15px; font-size: 16px; background: #ff9800; color: #fff; }
 
+        #end-menu { display: none; margin-bottom: 10px; text-align: center; z-index: 15; }
+        #btn-rematch {
+            background-color: #ff9800; color: #fff; border: none; padding: 10px 20px; font-size: 16px;
+            font-weight: bold; border-radius: 6px; cursor: pointer; box-shadow: 0 0 10px rgba(255,152,0,0.5);
+        }
+        #btn-rematch:disabled { background-color: #666; cursor: not-allowed; box-shadow: none; }
+
         .vs-wrapper { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; }
         .player-area, .opponent-area { display: flex; flex-direction: column; align-items: center; position: relative; }
-        .game-wrapper { display: flex; gap: 5px; align-items: flex-start; }
-        .side-panel {
-            display: flex; flex-direction: column; align-items: center;
-            background: #111; padding: 5px; border-radius: 8px; border: 2px solid #444;
-        }
+        .game-wrapper { display: flex; gap: 10px; align-items: flex-start; }
+        
+        .side-panel { display: flex; flex-direction: column; align-items: center; background: #111; padding: 5px; border-radius: 8px; border: 2px solid #444; }
         .side-panel h3 { margin: 0 0 5px 0; font-size: 12px; color: #ccc; }
         
         .main-board-container { position: relative; }
-        canvas { background-color: #000; }
-        .main-board { border: 2px solid #555; box-shadow: 0 0 15px rgba(255, 255, 255, 0.2); }
+        canvas { background-color: #000; border: 2px solid #555; box-shadow: 0 0 15px rgba(255, 255, 255, 0.2); }
+        .side-panel canvas { border: none; box-shadow: none; }
         
-        /* アクションテキスト演出 (改行対応) */
-        #action-text {
+        #action-text, #action-text-puyo {
             position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%);
-            color: #ffeb3b; font-size: 22px; font-weight: bold; font-style: italic;
-            text-shadow: 2px 2px 4px #000, 0 0 10px #ff9800;
-            pointer-events: none; opacity: 0; transition: opacity 0.2s, transform 0.2s;
-            text-align: center; width: 150%; z-index: 10;
-            white-space: pre-line;
+            color: #ffeb3b; font-size: 24px; font-weight: bold; font-style: italic;
+            text-shadow: 2px 2px 4px #000, 0 0 10px #ff9800; pointer-events: none;
+            opacity: 0; text-align: center; width: 150%; z-index: 10; white-space: pre-line;
         }
-        .pop-anim { animation: popup 1.5s forwards; }
+        .pop-anim { animation: popup 1.2s forwards; }
         @keyframes popup {
             0% { opacity: 0; transform: translate(-50%, -40%) scale(0.5); }
             10% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
@@ -58,540 +66,680 @@
             100% { opacity: 0; transform: translate(-50%, -70%); }
         }
 
-        #status-msg { color: #ffeb3b; font-size: 18px; margin-bottom: 5px; font-weight: bold; height: 24px; }
-        
-        #mobile-controls {
-            display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
-            margin-top: 15px; width: 100%; max-width: 400px;
-        }
+        #mobile-controls { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 15px; width: 100%; max-width: 400px; }
         .m-btn {
-            background: #333; color: #fff; border: 2px solid #555;
-            padding: 15px 0; border-radius: 8px; font-size: 18px; font-weight: bold;
-            user-select: none; touch-action: manipulation; text-align: center;
-            cursor: pointer;
+            background: #333; color: #fff; border: 2px solid #555; padding: 15px 0; border-radius: 8px;
+            font-size: 16px; font-weight: bold; user-select: none; touch-action: manipulation; text-align: center; cursor: pointer;
         }
         .m-btn:active { background: #555; }
         .controls { margin-top: 10px; text-align: center; color: #bbb; font-size: 12px; }
         kbd { background-color: #444; padding: 2px 5px; border-radius: 4px; }
         
+        .hidden { display: none !important; }
         @media (min-width: 768px) { #mobile-controls { display: none; } }
     </style>
 </head>
 <body>
 
-    <div id="status-msg">モードを選択してください</div>
-    
-    <div id="start-screen">
-        <h2>テトリス</h2>
+    <div class="top-bar">
+        <span id="status-msg">ゲームを選択してください</span>
+        <button id="btn-reset-top">タイトルへ (リセット)</button>
+    </div>
+
+    <div id="end-menu">
+        <button id="btn-rematch">同じペアで続ける</button>
+    </div>
+
+    <!-- ゲーム選択 -->
+    <div id="game-select-screen" class="overlay-screen">
+        <h2>遊ぶゲームを選択</h2>
+        <button onclick="selectGame('puyo')">ぷよぷよ</button>
+        <button onclick="selectGame('tetris')">テトリス</button>
+    </div>
+
+    <!-- モード選択 -->
+    <div id="start-screen" class="overlay-screen hidden">
+        <h2 id="mode-title">モード選択</h2>
         <button id="btn-solo">ソロプレイ</button>
         <button id="btn-multi">オンライン対戦</button>
-        
         <div id="multi-login">
             <input type="text" id="room-pass" placeholder="合言葉 (例: test)">
-            <br><br>
-            <button id="join-btn">入室</button>
+            <br><br><button id="join-btn">入室</button>
         </div>
     </div>
 
-    <div class="vs-wrapper">
+    <div class="vs-wrapper hidden" id="main-game-area">
+        <!-- プレイヤーエリア -->
         <div class="player-area">
             <h3 style="margin:5px;">あなた</h3>
-            <div class="game-wrapper">
-                <div class="side-panel">
-                    <h3>HOLD</h3><canvas id="hold" width="60" height="60"></canvas>
-                </div>
+            <div class="game-wrapper" id="tetris-ui" style="display:none;">
+                <div class="side-panel"><h3>HOLD</h3><canvas id="t-hold" width="60" height="60"></canvas></div>
                 <div class="main-board-container">
-                    <canvas id="tetris" class="main-board" width="240" height="480"></canvas>
+                    <canvas id="t-board" width="240" height="480"></canvas>
                     <div id="action-text"></div>
                 </div>
-                <div class="side-panel">
-                    <h3>NEXT</h3><canvas id="next" width="60" height="240"></canvas>
+                <div class="side-panel"><h3>NEXT</h3><canvas id="t-next" width="60" height="240"></canvas></div>
+            </div>
+
+            <div class="game-wrapper" id="puyo-ui" style="display:none;">
+                <div class="main-board-container">
+                    <canvas id="p-board" width="144" height="312"></canvas>
+                    <div id="action-text-puyo"></div>
                 </div>
+                <div class="side-panel"><h3>NEXT</h3><canvas id="p-next" width="48" height="150"></canvas></div>
             </div>
         </div>
 
-        <div class="opponent-area" id="opponent-container" style="display:none;">
+        <!-- 相手エリア -->
+        <div class="opponent-area hidden" id="opponent-container">
             <h3 style="margin:5px;">あいて</h3>
-            <canvas id="opponent" class="main-board" width="240" height="480"></canvas>
+            <canvas id="opp-t-board" width="240" height="480" style="display:none;"></canvas>
+            <canvas id="opp-p-board" width="144" height="312" style="display:none;"></canvas>
         </div>
     </div>
     
-    <div id="mobile-controls">
+    <div id="mobile-controls" class="hidden">
         <div class="m-btn" id="btn-left">←</div>
         <div class="m-btn" id="btn-right">→</div>
         <div class="m-btn" id="btn-ccw">左回転(Z)</div>
         <div class="m-btn" id="btn-cw">右回転(X)</div>
-        <div class="m-btn" id="btn-hold">HOLD</div>
+        <div class="m-btn t-only" id="btn-hold">HOLD</div>
         <div class="m-btn" id="btn-soft">↓(ソフト)</div>
-        <div class="m-btn" id="btn-hard" style="grid-column: span 2; background: #c62828;">HARD DROP</div>
+        <div class="m-btn t-only" id="btn-hard" style="grid-column: span 2; background: #c62828;">HARD DROP</div>
     </div>
 
-    <div class="controls">
-        <p><kbd>←</kbd> <kbd>→</kbd>: 移動 | <kbd>↑</kbd>: ハード | <kbd>↓</kbd>: ソフト | <kbd>Space</kbd>: ホールド | <kbd>X</kbd>: 右回転 | <kbd>Z</kbd>: 左回転</p>
+    <div class="controls hidden" id="keyboard-controls">
+        <p><kbd>←</kbd> <kbd>→</kbd>: 移動 | <kbd>↓</kbd>: ソフト/高速 | <kbd>X</kbd>: 右回転 | <kbd>Z</kbd>: 左回転<span class="t-only"> | <kbd>↑</kbd>: ハード | <kbd>Space</kbd>: ホールド</span></p>
     </div>
 
 <script>
 const socket = typeof io !== 'undefined' ? io() : null;
 let gameMode = 'solo';
 let isPlaying = false;
-let isClearing = false;
-let clearingLines = [];
+let isGameStarted = false;
+let selectedGame = null;
+
+// ---------------------------
+// システム管理・UI統合
+// ---------------------------
+document.getElementById('btn-reset-top').addEventListener('click', () => location.reload());
+
+function selectGame(game) {
+    selectedGame = game;
+    document.getElementById('game-select-screen').classList.add('hidden');
+    document.getElementById('start-screen').classList.remove('hidden');
+    document.getElementById('mode-title').innerText = game === 'puyo' ? 'ぷよぷよ - モード選択' : 'テトリス - モード選択';
+    
+    if (game === 'puyo') {
+        document.getElementById('puyo-ui').style.display = 'flex';
+        document.querySelectorAll('.t-only').forEach(el => el.style.display = 'none');
+    } else {
+        document.getElementById('tetris-ui').style.display = 'flex';
+        document.querySelectorAll('.t-only').forEach(el => el.style.display = 'block');
+    }
+}
 
 document.getElementById('btn-solo').addEventListener('click', () => {
-    document.getElementById('start-screen').style.display = 'none';
-    document.getElementById('status-msg').innerText = "ソロプレイ";
-    gameMode = 'solo';
-    startGame();
+    document.getElementById('start-screen').classList.add('hidden');
+    gameMode = 'solo'; initGameUI(); startGame();
 });
-
 document.getElementById('btn-multi').addEventListener('click', () => {
     document.getElementById('btn-solo').style.display = 'none';
     document.getElementById('btn-multi').style.display = 'none';
     document.getElementById('multi-login').style.display = 'block';
 });
-
 document.getElementById('join-btn').addEventListener('click', () => {
-    if (!socket) return alert('サーバーに接続されていません。');
+    if (!socket) return alert('サーバー未接続');
     const pass = document.getElementById('room-pass').value;
     if (pass) socket.emit('joinRoom', pass);
 });
 
+const rematchBtn = document.getElementById('btn-rematch');
+rematchBtn.addEventListener('click', () => {
+    if (gameMode === 'solo') {
+        document.getElementById('end-menu').style.display = 'none';
+        startGame();
+    } else if (gameMode === 'multi' && socket) {
+        socket.emit('requestRematch');
+        rematchBtn.disabled = true; rematchBtn.innerText = "相手を待機中...";
+    }
+});
+
+function initGameUI() {
+    document.getElementById('main-game-area').classList.remove('hidden');
+    document.getElementById('mobile-controls').classList.remove('hidden');
+    document.getElementById('keyboard-controls').classList.remove('hidden');
+}
+
+function triggerGameOver() {
+    emitBoardState();
+    isPlaying = false; isGameStarted = false;
+    document.getElementById('status-msg').innerText = "ゲームオーバー";
+    if (gameMode === 'multi' && socket) socket.emit('gameOver');
+    rematchBtn.disabled = false; rematchBtn.innerText = (gameMode === 'solo') ? "もう一度遊ぶ" : "再戦する";
+    document.getElementById('end-menu').style.display = 'block';
+}
+
 if (socket) {
-    socket.on('joined', (room) => {
-        document.getElementById('start-screen').style.display = 'none';
-        document.getElementById('opponent-container').style.display = 'flex';
-        gameMode = 'multi';
+    socket.on('joined', () => {
+        document.getElementById('start-screen').classList.add('hidden');
+        document.getElementById('opponent-container').classList.remove('hidden');
+        gameMode = 'multi'; isGameStarted = false; initGameUI();
     });
-    socket.on('waiting', () => document.getElementById('status-msg').innerText = "相手の入室を待っています...");
-    socket.on('roomFull', () => alert("このルームは満員です。"));
-    socket.on('gameStart', () => { document.getElementById('status-msg').innerText = "対戦スタート！"; startGame(); });
-    socket.on('opponentLeft', () => { document.getElementById('status-msg').innerText = "相手が切断しました(あなたの勝ち)"; isPlaying = false; });
-    socket.on('opponentGameOver', () => { document.getElementById('status-msg').innerText = "相手がゲームオーバー(あなたの勝ち)"; isPlaying = false; });
-    socket.on('opponentBoard', (data) => drawMatrix(data, {x:0, y:0}, oppCtx));
-    socket.on('receiveGarbage', (lines) => {
-        if(!isPlaying) return;
-        pendingGarbage += lines;
+    socket.on('waiting', () => document.getElementById('status-msg').innerText = "相手の入室待ち...");
+    socket.on('roomFull', () => alert("満員です。"));
+    socket.on('gameStart', () => { 
+        document.getElementById('end-menu').style.display = 'none';
+        rematchBtn.disabled = false; rematchBtn.innerText = "再戦する";
+        startGame(); 
+    });
+    socket.on('opponentLeft', () => {
+        if (isGameStarted) {
+            document.getElementById('status-msg').innerText = "相手が切断しました(あなたの勝ち)"; 
+            isPlaying = false; isGameStarted = false; document.getElementById('end-menu').style.display = 'block';
+        }
+    });
+    socket.on('opponentGameOver', () => { 
+        document.getElementById('status-msg').innerText = "相手がゲームオーバー(あなたの勝ち)"; 
+        isPlaying = false; isGameStarted = false; document.getElementById('end-menu').style.display = 'block';
+    });
+    
+    // 相手の盤面描画
+    socket.on('opponentBoard', (data) => {
+        if (!data || !data.type) return;
+        if (data.type === 'puyo') {
+            document.getElementById('opp-p-board').style.display = 'block';
+            document.getElementById('opp-t-board').style.display = 'none';
+            drawPMatrix(data.board, oppPCtx);
+        } else {
+            document.getElementById('opp-t-board').style.display = 'block';
+            document.getElementById('opp-p-board').style.display = 'none';
+            drawTMatrix(data.board, {x:0, y:0}, oppTCtx);
+        }
+    });
+
+    socket.on('opponentRematch', () => {
+        if (!isGameStarted) {
+            document.getElementById('status-msg').innerText = "相手が再戦を希望しています！";
+            rematchBtn.innerText = "相手が再戦希望中！(タップして開始)";
+        }
+    });
+    
+    // 異種格闘戦対応：公式レート近似
+    socket.on('receiveGarbage', (data) => {
+        if (!isPlaying) return;
+        let amount = data.amount;
+        
+        if (data.type === 'tetris' && selectedGame === 'puyo') {
+            // テトリス火力(段) → ぷよぷよ(個数) への変換テーブル
+            const tToP_rate = [0, 3, 6, 9, 16, 21, 24, 29, 34, 39, 44, 49, 54];
+            amount = tToP_rate[amount] !== undefined ? tToP_rate[amount] : Math.floor(amount * 4.5);
+        } 
+        else if (data.type === 'puyo' && selectedGame === 'tetris') {
+            // ぷよぷよ火力(個数) → テトリス(段) への変換 (1段＝約5個)
+            amount = Math.floor(amount / 5);
+        }
+        
+        if (amount > 0) {
+            if (selectedGame === 'puyo') pPendingGarbage += amount;
+            else tPendingGarbage += amount;
+        }
     });
 }
 
 function startGame() {
-    isPlaying = true; board.forEach(row => row.fill(0));
-    bag = []; nextQueue = []; holdType = null; combo = 0; b2b = false; pendingGarbage = 0;
-    fillNextQueue(); playerReset(); update();
-}
-
-const canvas = document.getElementById('tetris');
-const context = canvas.getContext('2d');
-context.scale(24, 24); 
-
-const oppCanvas = document.getElementById('opponent');
-const oppCtx = oppCanvas.getContext('2d');
-oppCtx.scale(24, 24); 
-
-const holdCanvas = document.getElementById('hold');
-const holdCtx = holdCanvas.getContext('2d');
-holdCtx.scale(15, 15); 
-
-const nextCanvas = document.getElementById('next');
-const nextCtx = nextCanvas.getContext('2d');
-nextCtx.scale(15, 15); 
-
-const SHAPES = [ [],
-    [[0,0,0,0], [1,1,1,1], [0,0,0,0], [0,0,0,0]],
-    [[2,0,0], [2,2,2], [0,0,0]],
-    [[0,0,3], [3,3,3], [0,0,0]],
-    [[4,4], [4,4]],             
-    [[0,5,5], [5,5,0], [0,0,0]],
-    [[0,6,0], [6,6,6], [0,0,0]],
-    [[7,7,0], [0,7,7], [0,0,0]]  
-];
-
-const COLORS = [ null, '#00FFFF', '#0000FF', '#FFA500', '#FFFF00', '#00FF00', '#800080', '#FF0000', '#666666' ];
-const KICK_DATA = {
-    'JLSTZ': {
-        '0->1': [[0,0], [-1,0], [-1,-1], [0,2], [-1,2]],
-        '1->0': [[0,0], [1,0], [1,1], [0,-2], [1,-2]],
-        '1->2': [[0,0], [1,0], [1,1], [0,-2], [1,-2]],
-        '2->1': [[0,0], [-1,0], [-1,-1], [0,2], [-1,2]],
-        '2->3': [[0,0], [1,0], [1,-1], [0,2], [1,2]],
-        '3->2': [[0,0], [-1,0], [-1,1], [0,-2], [-1,-2]],
-        '3->0': [[0,0], [-1,0], [-1,1], [0,-2], [-1,-2]],
-        '0->3': [[0,0], [1,0], [1,-1], [0,2], [1,2]]
-    },
-    'I': {
-        '0->1': [[0,0], [-2,0], [1,0], [-2,1], [1,-2]],
-        '1->0': [[0,0], [2,0], [-1,0], [2,-1], [-1,2]],
-        '1->2': [[0,0], [-1,0], [2,0], [-1,-2], [2,1]],
-        '2->1': [[0,0], [1,0], [-2,0], [1,2], [-2,-1]],
-        '2->3': [[0,0], [2,0], [-1,0], [2,-1], [-1,2]],
-        '3->2': [[0,0], [-2,0], [1,0], [-2,1], [1,-2]],
-        '3->0': [[0,0], [1,0], [-2,0], [1,2], [-2,-1]],
-        '0->3': [[0,0], [-1,0], [2,0], [-1,-2], [2,1]]
-    }
-};
-
-const board = Array.from({length: 20}, () => new Array(10).fill(0));
-let bag = [], nextQueue = [], holdType = null, canHold = true;
-const player = { pos: {x: 0, y: 0}, matrix: null, type: 0, rotationState: 0 };
-let lockTimer = 0, moveResets = 0, lowestY = 0, pendingGarbage = 0;
-let lastAction = null;
-let combo = 0, b2b = false;
-
-function pullFromBag() {
-    if (bag.length === 0) {
-        bag = [1, 2, 3, 4, 5, 6, 7];
-        for (let i = 6; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [bag[i], bag[j]] = [bag[j], bag[i]];
-        }
-    }
-    return bag.pop();
-}
-
-function fillNextQueue() { while (nextQueue.length < 5) nextQueue.push(pullFromBag()); }
-function getNextPiece() { fillNextQueue(); const p = nextQueue.shift(); fillNextQueue(); return p; }
-
-function spawnPiece(type) {
-    player.type = type; player.matrix = SHAPES[type].map(row => [...row]);
-    player.rotationState = 0; player.pos.y = 0;
-    player.pos.x = Math.floor(5 - player.matrix[0].length / 2);
-    lockTimer = 0; moveResets = 0; lowestY = player.pos.y; lastAction = null;
-    
-    if (collide(board, player)) {
-        isPlaying = false;
-        document.getElementById('status-msg').innerText = "ゲームオーバー";
-        if(gameMode === 'multi') socket.emit('gameOver');
-    }
-    emitBoardState();
-}
-
-function playerReset() { spawnPiece(getNextPiece()); canHold = true; }
-
-function holdPiece() {
-    if (!canHold || !isPlaying || isClearing) return;
-    if (holdType === null) { holdType = player.type; playerReset(); } 
-    else { const t = player.type; spawnPiece(holdType); holdType = t; }
-    canHold = false; dropCounter = 0;
-    emitBoardState();
-}
-
-function drawMatrix(matrix, offset, ctx, isGhost = false, isFlash = false) {
-    if (!matrix) return;
-    if (ctx === oppCtx) { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, 10, 20); }
-    matrix.forEach((row, y) => {
-        row.forEach((value, x) => {
-            if (value !== 0) {
-                if (isFlash) { ctx.fillStyle = '#FFFFFF'; }
-                else if (isGhost) { ctx.fillStyle = COLORS[value] + '40'; ctx.strokeStyle = 'rgba(255,255,255,0.2)'; } 
-                else { ctx.fillStyle = COLORS[value]; ctx.strokeStyle = 'rgba(0,0,0,0.5)'; }
-                ctx.fillRect(x + offset.x, y + offset.y, 1, 1);
-                ctx.lineWidth = 0.05; ctx.strokeRect(x + offset.x, y + offset.y, 1, 1);
-            }
-        });
-    });
-}
-
-function drawMiniMatrix(type, ctx, offsetX, offsetY) {
-    if (!type) return;
-    const m = SHAPES[type];
-    let xO = offsetX + (4 - m[0].length) / 2, yO = offsetY + (4 - m.length) / 2;
-    if (type === 1) yO -= 0.5; if (type === 4) xO += 0.5;
-    m.forEach((row, y) => {
-        row.forEach((value, x) => {
-            if (value !== 0) {
-                ctx.fillStyle = COLORS[value]; ctx.fillRect(x + xO, y + yO, 1, 1);
-                ctx.strokeStyle = '#000'; ctx.lineWidth = 0.1; ctx.strokeRect(x + xO, y + yO, 1, 1);
-            }
-        });
-    });
-}
-
-function collide(board, player) {
-    const [m, o] = [player.matrix, player.pos];
-    for (let y = 0; y < m.length; ++y) {
-        for (let x = 0; x < m[y].length; ++x) {
-            if (m[y][x] !== 0 && (board[y + o.y] && board[y + o.y][x + o.x]) !== 0) return true;
-        }
-    }
-    return false;
-}
-
-function showActionText(text) {
-    const el = document.getElementById('action-text');
-    el.innerText = text;
-    el.classList.remove('pop-anim');
-    void el.offsetWidth;
-    el.classList.add('pop-anim');
-}
-
-function checkTSpin() {
-    if (player.type !== 6 || lastAction !== 'rotate') return false;
-    let cornersCount = 0;
-    const px = player.pos.x, py = player.pos.y;
-    const corners = [ [0,0], [2,0], [0,2], [2,2] ];
-    corners.forEach(c => {
-        const cx = px + c[0], cy = py + c[1];
-        if (cx < 0 || cx >= 10 || cy >= 20 || board[cy][cx] !== 0) cornersCount++;
-    });
-    return cornersCount >= 3;
-}
-
-function lockPiece() {
-    if (isClearing) return;
-    const isTSpin = checkTSpin();
-    
-    player.matrix.forEach((row, y) => {
-        row.forEach((value, x) => {
-            if (value !== 0) board[y + player.pos.y][x + player.pos.x] = value;
-        });
-    });
-
-    clearingLines = [];
-    for (let y = 0; y < board.length; ++y) {
-        if (board[y].every(val => val !== 0 && val !== 8)) {
-            clearingLines.push(y);
-        }
-    }
-
-    if (clearingLines.length > 0) {
-        isClearing = true;
-        calculateFirepower(clearingLines.length, isTSpin);
-        
-        setTimeout(() => {
-            clearingLines.forEach(y => {
-                board.splice(y, 1);
-                board.unshift(new Array(10).fill(0));
-            });
-            
-            if (board[19].every(val => val === 0)) {
-                showActionText("PERFECT CLEAR!");
-                if(gameMode === 'multi') socket.emit('sendGarbage', 10);
-            }
-
-            applyGarbage();
-            isClearing = false;
-            playerReset();
-        }, 150);
-    } else {
-        if (isTSpin) showActionText("T-SPIN");
-        combo = 0; // ラインが消えなかったためRENリセット
-        applyGarbage();
-        playerReset();
-    }
-    dropCounter = 0;
-}
-
-function calculateFirepower(lines, isTSpin) {
-    let damage = 0;
-    let txt = "";
-
-    // 1. 基本消しテキスト & 火力
-    if (lines === 1) { 
-        damage = isTSpin ? 2 : 0; 
-        if (isTSpin) txt = "T-SPIN SINGLE";
-    }
-    else if (lines === 2) { 
-        damage = isTSpin ? 4 : 1; 
-        if (isTSpin) txt = "T-SPIN DOUBLE";
-    }
-    else if (lines === 3) { 
-        damage = isTSpin ? 6 : 2; 
-        if (isTSpin) txt = "T-SPIN TRIPLE";
-    }
-    else if (lines === 4) { 
-        damage = 4; 
-        txt = "TETRIS"; 
-    }
-
-    // 2. Back-to-Back判定
-    const isDifficult = isTSpin || lines === 4;
-    if (isDifficult) {
-        if (b2b) { damage += 1; txt += " (B2B)"; }
-        b2b = true;
-    } else { 
-        b2b = false; 
-    }
-
-    // 3. REN(コンボ)判定 & 演出生成
-    combo++;
-    if (combo > 1) { 
-        damage += Math.floor((combo - 1) / 2); 
-        const renCount = combo - 1; // 2回目の連続消去で "1 REN"
-        if (txt !== "") {
-            txt += `\n${renCount} REN`;
-        } else {
-            txt = `${renCount} REN`;
-        }
-    }
-
-    // T-Spin、テトリス、RENのいずれかが発生していれば画面に表示
-    if (txt !== "") {
-        showActionText(txt);
-    }
-    
-    if (gameMode === 'multi' && damage > 0) {
-        socket.emit('sendGarbage', damage);
-    }
-}
-
-function applyGarbage() {
-    if (pendingGarbage > 0) {
-        for(let i = 0; i < pendingGarbage; i++) {
-            board.shift();
-            const garbageRow = new Array(10).fill(8);
-            garbageRow[Math.floor(Math.random() * 10)] = 0;
-            board.push(garbageRow);
-        }
-        pendingGarbage = 0;
-        emitBoardState();
-    }
+    isPlaying = true; isGameStarted = true;
+    document.getElementById('status-msg').innerText = (gameMode === 'solo') ? "ソロプレイ" : "対戦スタート！";
+    if (selectedGame === 'puyo') startPuyo();
+    else startTetris();
+    lastTime = performance.now();
+    requestAnimationFrame(update);
 }
 
 function emitBoardState() {
     if (gameMode !== 'multi' || !isPlaying) return;
-    const renderBoard = board.map(row => [...row]);
-    if (player.matrix && !isClearing) {
-        const ghostY = getGhostY();
-        player.matrix.forEach((row, y) => {
-            row.forEach((v, x) => {
-                if (v !== 0) {
-                    if (renderBoard[y + ghostY] && renderBoard[y + ghostY][x + player.pos.x] === 0) renderBoard[y + ghostY][x + player.pos.x] = v;
-                    if (renderBoard[y + player.pos.y]) renderBoard[y + player.pos.y][x + player.pos.x] = v;
-                }
-            });
-        });
-    }
-    socket.emit('boardUpdate', renderBoard);
-}
-
-function getGhostY() {
-    const origY = player.pos.y;
-    while (!collide(board, player)) player.pos.y++;
-    const ghostY = player.pos.y - 1;
-    player.pos.y = origY;
-    return ghostY;
-}
-
-function draw() {
-    context.fillStyle = '#000'; context.fillRect(0, 0, canvas.width, canvas.height);
-    
-    board.forEach((row, y) => {
-        if (isClearing && clearingLines.includes(y)) {
-            context.fillStyle = '#fff'; context.fillRect(0, y, 10, 1);
-        } else {
-            drawMatrix([row], {x: 0, y: y}, context);
+    if (selectedGame === 'puyo') {
+        const renderBoard = pBoard.map(row => [...row]);
+        if (!pIsClearing) {
+            const ghostY = pGetGhostY();
+            const c2_ghost = pGetC2Pos(pPlayer.pos.x, ghostY, pPlayer.rot);
+            if (c2_ghost.y >=0 && c2_ghost.y < 13 && renderBoard[c2_ghost.y][c2_ghost.x] === 0) renderBoard[c2_ghost.y][c2_ghost.x] = pPlayer.c2 + 10;
+            if (ghostY >=0 && ghostY < 13 && renderBoard[ghostY][pPlayer.pos.x] === 0) renderBoard[ghostY][pPlayer.pos.x] = pPlayer.c1 + 10;
+            const c2 = pGetC2Pos(pPlayer.pos.x, pPlayer.pos.y, pPlayer.rot);
+            if (c2.y >=0 && c2.y < 13) renderBoard[c2.y][c2.x] = pPlayer.c2;
+            if (pPlayer.pos.y >=0 && pPlayer.pos.y < 13) renderBoard[pPlayer.pos.y][pPlayer.pos.x] = pPlayer.c1;
         }
-    });
-
-    if (player.matrix && isPlaying && !isClearing) {
-        drawMatrix(player.matrix, {x: player.pos.x, y: getGhostY()}, context, true);
-        drawMatrix(player.matrix, player.pos, context);
+        socket.emit('boardUpdate', { type: 'puyo', board: renderBoard });
+    } else {
+        const renderBoard = tBoard.map(row => [...row]);
+        if (tPlayer.matrix && !tIsClearing) {
+            const ghostY = tGetGhostY();
+            tPlayer.matrix.forEach((row, y) => {
+                row.forEach((v, x) => {
+                    if (v !== 0) {
+                        if (renderBoard[y + ghostY] && renderBoard[y + ghostY][x + tPlayer.pos.x] === 0) renderBoard[y + ghostY][x + tPlayer.pos.x] = v + 10;
+                        if (renderBoard[y + tPlayer.pos.y]) renderBoard[y + tPlayer.pos.y][x + tPlayer.pos.x] = v;
+                    }
+                });
+            });
+        }
+        socket.emit('boardUpdate', { type: 'tetris', board: renderBoard });
     }
-    
-    holdCtx.fillStyle = '#111'; holdCtx.fillRect(0, 0, holdCanvas.width, holdCanvas.height);
-    if (holdType) drawMiniMatrix(holdType, holdCtx, 0, 0);
-    
-    nextCtx.fillStyle = '#111'; nextCtx.fillRect(0, 0, nextCanvas.width, nextCanvas.height);
-    nextQueue.forEach((type, i) => drawMiniMatrix(type, nextCtx, 0, i * 4));
 }
 
-function playerDrop() {
-    player.pos.y++; lastAction = 'move';
-    if (collide(board, player)) player.pos.y--; 
-    dropCounter = 0; emitBoardState();
+function showActionText(text) {
+    const elId = selectedGame === 'puyo' ? 'action-text-puyo' : 'action-text';
+    const el = document.getElementById(elId);
+    el.innerText = text; el.classList.remove('pop-anim');
+    void el.offsetWidth; el.classList.add('pop-anim');
 }
 
-function playerMove(dir) {
-    if (isClearing) return;
-    player.pos.x += dir; lastAction = 'move';
-    if (collide(board, player)) player.pos.x -= dir;
-    else {
-        if (player.pos.y > lowestY) { lowestY = player.pos.y; moveResets = 0; }
-        if (collide(board, {matrix: player.matrix, pos: {x:player.pos.x, y:player.pos.y+1}}) && moveResets < 15) { lockTimer = 0; moveResets++; }
-    }
+// ---------------------------
+// ぷよぷよ エンジン
+// ---------------------------
+const pCanvas = document.getElementById('p-board'); const pCtx = pCanvas.getContext('2d'); pCtx.scale(24, 24);
+const pNextCanvas = document.getElementById('p-next'); const pNextCtx = pNextCanvas.getContext('2d'); pNextCtx.scale(24, 24);
+const oppPCanvas = document.getElementById('opp-p-board'); const oppPCtx = oppPCanvas.getContext('2d'); oppPCtx.scale(24, 24);
+
+const P_COLORS = [ null, '#ef4444', '#3b82f6', '#22c55e', '#eab308', null, null, null, '#a3a3a3' ];
+const CHAIN_POWER = [0, 8, 16, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448, 480, 512, 544];
+const CONNECT_BONUS = { 4:0, 5:2, 6:3, 7:4, 8:5, 9:6, 10:7 }; 
+
+let pBoard = [], pNextQueue = [], pPendingGarbage = 0, pCombo = 0, pScoreRemainder = 0, pChainOjama = 0;
+let pIsClearing = false;
+let pPlayer = { pos: {x: 2, y: 1}, c1: 0, c2: 0, rot: 0 };
+
+function startPuyo() {
+    pBoard = Array.from({length: 13}, () => new Array(6).fill(0));
+    pNextQueue = []; pPendingGarbage = 0; pCombo = 0; pScoreRemainder = 0; pChainOjama = 0; pIsClearing = false;
+    for(let i=0; i<3; i++) pNextQueue.push({ c1: Math.floor(Math.random()*4)+1, c2: Math.floor(Math.random()*4)+1 });
+    pResetPlayer();
+}
+
+function pResetPlayer() {
+    let next = pNextQueue.shift(); pNextQueue.push({ c1: Math.floor(Math.random()*4)+1, c2: Math.floor(Math.random()*4)+1 });
+    pPlayer.c1 = next.c1; pPlayer.c2 = next.c2; pPlayer.pos = {x: 2, y: 1}; pPlayer.rot = 0;
+    if (pBoard[1][2] !== 0) { pDraw(); triggerGameOver(); return; }
     emitBoardState();
 }
 
-function playerRotate(dir) {
-    if (player.type === 4 || isClearing) return;
-    const origM = player.matrix.map(r => [...r]);
-    const origX = player.pos.x, origY = player.pos.y, origS = player.rotationState;
-    
-    for (let y = 0; y < player.matrix.length; ++y)
-        for (let x = 0; x < y; ++x) [player.matrix[x][y], player.matrix[y][x]] = [player.matrix[y][x], player.matrix[x][y]];
-    if (dir > 0) player.matrix.forEach(r => r.reverse()); else player.matrix.reverse();
-    
-    let newS = (player.rotationState + dir + 4) % 4;
-    const tests = KICK_DATA[(player.type === 1) ? 'I' : 'JLSTZ'][`${origS}->${newS}`];
-    
-    let rotated = false;
-    for (let i = 0; i < tests.length; i++) {
-        player.pos.x = origX + tests[i][0]; player.pos.y = origY + tests[i][1];
-        if (!collide(board, player)) { player.rotationState = newS; rotated = true; break; }
+function pGetC2Pos(x, y, rot) {
+    if (rot === 0) return {x, y: y - 1}; if (rot === 1) return {x: x + 1, y};
+    if (rot === 2) return {x, y: y + 1}; return {x: x - 1, y};
+}
+function pIsValid(x, y) { return x >= 0 && x < 6 && y >= 0 && y < 13 && pBoard[y][x] === 0; }
+function pCollide(p) {
+    if (!pIsValid(p.pos.x, p.pos.y)) return true;
+    let c2 = pGetC2Pos(p.pos.x, p.pos.y, p.rot);
+    if (!pIsValid(c2.x, c2.y)) return true; return false;
+}
+
+function pMove(dir) {
+    if (pIsClearing) return; pPlayer.pos.x += dir;
+    if (pCollide(pPlayer)) pPlayer.pos.x -= dir; emitBoardState();
+}
+function pRotate(dir) {
+    if (pIsClearing) return;
+    let newRot = (pPlayer.rot + dir + 4) % 4; let c2 = pGetC2Pos(pPlayer.pos.x, pPlayer.pos.y, newRot);
+    if (pIsValid(c2.x, c2.y)) { pPlayer.rot = newRot; } 
+    else {
+        let shiftX = (newRot===1)?-1:(newRot===3)?1:0; let shiftY = (newRot===0)?1:(newRot===2)?-1:0;
+        let t1 = { pos: {x: pPlayer.pos.x + shiftX, y: pPlayer.pos.y + shiftY}, rot: newRot, c1: pPlayer.c1, c2: pPlayer.c2 };
+        if (!pCollide(t1)) { pPlayer.pos = t1.pos; pPlayer.rot = newRot; }
+        else {
+            let t2 = { pos: {x: pPlayer.pos.x, y: pPlayer.pos.y - 1}, rot: newRot, c1: pPlayer.c1, c2: pPlayer.c2 };
+            if (!pCollide(t2)) { pPlayer.pos = t2.pos; pPlayer.rot = newRot; }
+        }
     }
-    
-    if (!rotated) {
-        player.matrix = origM; player.pos.x = origX; player.pos.y = origY; player.rotationState = origS;
-    } else {
-        lastAction = 'rotate';
-        if (player.pos.y > lowestY) { lowestY = player.pos.y; moveResets = 0; }
-        if (collide(board, {matrix: player.matrix, pos: {x:player.pos.x, y:player.pos.y+1}}) && moveResets < 15) { lockTimer = 0; moveResets++; }
+    emitBoardState();
+}
+function pDrop() {
+    pPlayer.pos.y++;
+    if (pCollide(pPlayer)) { pPlayer.pos.y--; pLock(); }
+    dropCounter = 0; emitBoardState();
+}
+function pGetGhostY() {
+    let origY = pPlayer.pos.y;
+    while (!pCollide({pos: {x: pPlayer.pos.x, y: pPlayer.pos.y + 1}, rot: pPlayer.rot})) pPlayer.pos.y++;
+    let gy = pPlayer.pos.y; pPlayer.pos.y = origY; return gy;
+}
+
+function pLock() {
+    if (pIsClearing) return; pIsClearing = true;
+    pBoard[pPlayer.pos.y][pPlayer.pos.x] = pPlayer.c1;
+    let c2 = pGetC2Pos(pPlayer.pos.x, pPlayer.pos.y, pPlayer.rot);
+    if (c2.y >= 0 && c2.y < 13 && c2.x >= 0 && c2.x < 6) pBoard[c2.y][c2.x] = pPlayer.c2;
+    pCombo = 0; pChainOjama = 0; pProcessChain();
+}
+
+function pApplyGravity() {
+    let moved = false;
+    for (let x = 0; x < 6; x++) {
+        let writeY = 12;
+        for (let y = 12; y >= 0; y--) {
+            if (pBoard[y][x] !== 0) {
+                if (writeY !== y) { pBoard[writeY][x] = pBoard[y][x]; pBoard[y][x] = 0; moved = true; }
+                writeY--;
+            }
+        }
+    }
+    return moved;
+}
+
+function pFindMatches() {
+    let matched = false, groups = [], uniqueColors = new Set(), toClear = Array.from({length: 13}, () => new Array(6).fill(false)), visited = Array.from({length: 13}, () => new Array(6).fill(false));
+    for (let y = 0; y < 13; y++) {
+        for (let x = 0; x < 6; x++) {
+            if (pBoard[y][x] !== 0 && pBoard[y][x] !== 8 && !visited[y][x]) {
+                let color = pBoard[y][x], group = [], q = [[x, y]]; visited[y][x] = true; let head = 0;
+                while (head < q.length) {
+                    let [cx, cy] = q[head++]; group.push([cx, cy]);
+                    [[1,0], [-1,0], [0,1], [0,-1]].forEach(d => {
+                        let nx = cx + d[0], ny = cy + d[1];
+                        if (nx >= 0 && nx < 6 && ny >= 0 && ny < 13 && !visited[ny][nx] && pBoard[ny][nx] === color) { visited[ny][nx] = true; q.push([nx, ny]); }
+                    });
+                }
+                if (group.length >= 4) {
+                    matched = true; groups.push({color: color, count: group.length}); uniqueColors.add(color);
+                    group.forEach(([cx, cy]) => {
+                        toClear[cy][cx] = true;
+                        [[1,0], [-1,0], [0,1], [0,-1]].forEach(d => {
+                            let nx = cx + d[0], ny = cy + d[1]; if (nx >= 0 && nx < 6 && ny >= 0 && ny < 13 && pBoard[ny][nx] === 8) toClear[ny][nx] = true;
+                        });
+                    });
+                }
+            }
+        }
+    }
+    if (matched) {
+        for (let y = 0; y < 13; y++) for (let x = 0; x < 6; x++) if (toClear[y][x]) pBoard[y][x] = 0;
+        let total = 0, cbSum = 0;
+        groups.forEach(g => { total += g.count; cbSum += g.count >= 11 ? 10 : (CONNECT_BONUS[g.count] || 0); });
+        let col = uniqueColors.size; let colorBonus = col === 1 ? 0 : (col === 2 ? 3 : (col === 3 ? 6 : 12));
+        let ch = CHAIN_POWER[Math.min(pCombo, CHAIN_POWER.length - 1)] || 0;
+        let mult = ch + cbSum + colorBonus; if (mult === 0) mult = 1;
+        pScoreRemainder += total * 10 * mult;
+        pChainOjama += Math.floor(pScoreRemainder / 70); pScoreRemainder %= 70;
+    }
+    return matched;
+}
+
+function pProcessChain() {
+    let moved = pApplyGravity(); pDraw(); emitBoardState();
+    setTimeout(() => {
+        if (pFindMatches()) {
+            pCombo++; showActionText(pCombo + " 連鎖！"); pDraw(); emitBoardState();
+            setTimeout(() => pProcessChain(), 300);
+        } else {
+            if (pChainOjama > 0 && gameMode === 'multi') socket.emit('sendGarbage', { type: 'puyo', amount: pChainOjama });
+            pCombo = 0; pChainOjama = 0; pApplyGarbage(); pIsClearing = false;
+            if (pBoard[1][2] !== 0) { pDraw(); triggerGameOver(); } else pResetPlayer();
+        }
+    }, moved ? 200 : 50);
+}
+
+function pApplyGarbage() {
+    if (pPendingGarbage <= 0) return;
+    let total = pPendingGarbage; pPendingGarbage = 0;
+    while (total > 0) {
+        let dc = Math.min(total, 6); total -= dc;
+        let cols = [0, 1, 2, 3, 4, 5].sort(() => Math.random() - 0.5);
+        for (let i = 0; i < dc; i++) {
+            let col = cols[i], y = 0;
+            while (y < 13 && pBoard[y][col] === 0) y++;
+            y--; if (y >= 0) pBoard[y][col] = 8;
+        }
+    }
+    pApplyGravity(); pDraw(); emitBoardState();
+    if (pBoard[1][2] !== 0) triggerGameOver();
+}
+
+function drawPBlock(ctx, x, y, c, isG = false) {
+    ctx.fillStyle = isG ? P_COLORS[c] + '40' : P_COLORS[c];
+    ctx.strokeStyle = isG ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.8)';
+    ctx.fillRect(x, y, 1, 1); ctx.lineWidth = 0.08; ctx.strokeRect(x, y, 1, 1);
+}
+function drawPDeath(ctx, x, y) {
+    ctx.strokeStyle = 'rgba(255, 50, 50, 0.7)'; ctx.lineWidth = 0.15; ctx.beginPath();
+    ctx.moveTo(x+0.1, y+0.1); ctx.lineTo(x+0.9, y+0.9); ctx.moveTo(x+0.9, y+0.1); ctx.lineTo(x+0.1, y+0.9); ctx.stroke();
+}
+function drawPMatrix(mat, ctx) {
+    ctx.fillStyle = '#111'; ctx.fillRect(0, 0, 6, 13); drawPDeath(ctx, 2, 1);
+    mat.forEach((r, y) => r.forEach((v, x) => { if (v !== 0) drawPBlock(ctx, x, y, v > 10 ? v-10 : v, v > 10); }));
+}
+function pDraw() {
+    drawPMatrix(pBoard, pCtx);
+    if (isPlaying && !pIsClearing) {
+        let gy = pGetGhostY(); let c2g = pGetC2Pos(pPlayer.pos.x, gy, pPlayer.rot);
+        drawPBlock(pCtx, c2g.x, c2g.y, pPlayer.c2, true); drawPBlock(pCtx, pPlayer.pos.x, gy, pPlayer.c1, true);
+        let c2 = pGetC2Pos(pPlayer.pos.x, pPlayer.pos.y, pPlayer.rot);
+        drawPBlock(pCtx, c2.x, c2.y, pPlayer.c2); drawPBlock(pCtx, pPlayer.pos.x, pPlayer.pos.y, pPlayer.c1);
+    }
+    pNextCtx.fillStyle = '#111'; pNextCtx.fillRect(0, 0, 2, 6);
+    pNextQueue.forEach((p, i) => { drawPBlock(pNextCtx, 0.5, i*2.5+0.5, p.c2); drawPBlock(pNextCtx, 0.5, i*2.5+1.5, p.c1); });
+}
+
+// ---------------------------
+// テトリス エンジン
+// ---------------------------
+const tCanvas = document.getElementById('t-board'); const tCtx = tCanvas.getContext('2d'); tCtx.scale(24, 24);
+const tNextCtx = document.getElementById('t-next').getContext('2d'); tNextCtx.scale(15, 15);
+const tHoldCtx = document.getElementById('t-hold').getContext('2d'); tHoldCtx.scale(15, 15);
+const oppTCanvas = document.getElementById('opp-t-board'); const oppTCtx = oppTCanvas.getContext('2d'); oppTCtx.scale(24, 24);
+
+const T_COLORS = [ null, '#00FFFF', '#0000FF', '#FFA500', '#FFFF00', '#00FF00', '#800080', '#FF0000', '#666666' ];
+const SHAPES = [ [], [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]], [[2,0,0],[2,2,2],[0,0,0]], [[0,0,3],[3,3,3],[0,0,0]], [[4,4],[4,4]], [[0,5,5],[5,5,0],[0,0,0]], [[0,6,0],[6,6,6],[0,0,0]], [[7,7,0],[0,7,7],[0,0,0]] ];
+const KICK = {
+    'JLSTZ': {'0->1':[[0,0],[-1,0],[-1,-1],[0,2],[-1,2]],'1->0':[[0,0],[1,0],[1,1],[0,-2],[1,-2]],'1->2':[[0,0],[1,0],[1,1],[0,-2],[1,-2]],'2->1':[[0,0],[-1,0],[-1,-1],[0,2],[-1,2]],'2->3':[[0,0],[1,0],[1,-1],[0,2],[1,2]],'3->2':[[0,0],[-1,0],[-1,1],[0,-2],[-1,-2]],'3->0':[[0,0],[-1,0],[-1,1],[0,-2],[-1,-2]],'0->3':[[0,0],[1,0],[1,-1],[0,2],[1,2]]},
+    'I': {'0->1':[[0,0],[-2,0],[1,0],[-2,1],[1,-2]],'1->0':[[0,0],[2,0],[-1,0],[2,-1],[-1,2]],'1->2':[[0,0],[-1,0],[2,0],[-1,-2],[2,1]],'2->1':[[0,0],[1,0],[-2,0],[1,2],[-2,-1]],'2->3':[[0,0],[2,0],[-1,0],[2,-1],[-1,2]],'3->2':[[0,0],[-2,0],[1,0],[-2,1],[1,-2]],'3->0':[[0,0],[1,0],[-2,0],[1,2],[-2,-1]],'0->3':[[0,0],[-1,0],[2,0],[-1,-2],[2,1]]}
+};
+
+let tBoard = [], tBag = [], tNextQ = [], tHoldType = null, tCanHold = true, tIsClearing = false, tClearLines = [];
+let tPlayer = { pos: {x:0, y:0}, matrix: null, type: 0, rot: 0 };
+let tLockTimer = 0, tMoveResets = 0, tLowestY = 0, tPendingGarbage = 0, tLastAction = null, tCombo = 0, tB2B = false;
+
+function startTetris() {
+    tBoard = Array.from({length: 20}, () => new Array(10).fill(0));
+    tBag = []; tNextQ = []; tHoldType = null; tCombo = 0; tB2B = false; tPendingGarbage = 0; tIsClearing = false;
+    for(let i=0; i<5; i++) tNextQ.push(tPullBag()); tResetPlayer();
+}
+function tPullBag() {
+    if (!tBag.length) {
+        tBag = [1,2,3,4,5,6,7]; for(let i=6;i>0;i--) { let j=Math.floor(Math.random()*(i+1)); [tBag[i], tBag[j]]=[tBag[j], tBag[i]]; }
+    }
+    return tBag.pop();
+}
+function tSpawn(type) {
+    tPlayer.type = type; tPlayer.matrix = SHAPES[type].map(r=>[...r]); tPlayer.rot = 0; tPlayer.pos.y = 0;
+    tPlayer.pos.x = Math.floor(5 - tPlayer.matrix[0].length / 2);
+    tLockTimer = 0; tMoveResets = 0; tLowestY = tPlayer.pos.y; tLastAction = null;
+    if (tCollide(tBoard, tPlayer)) { tDraw(); triggerGameOver(); return; }
+    emitBoardState();
+}
+function tResetPlayer() { tSpawn(tNextQ.shift()); tNextQ.push(tPullBag()); tCanHold = true; }
+function tHold() {
+    if (!tCanHold || !isPlaying || tIsClearing) return;
+    if (!tHoldType) { tHoldType = tPlayer.type; tResetPlayer(); }
+    else { let temp = tPlayer.type; tSpawn(tHoldType); tHoldType = temp; }
+    tCanHold = false; dropCounter = 0; emitBoardState();
+}
+function tCollide(b, p) {
+    const [m, o] = [p.matrix, p.pos];
+    for (let y=0; y<m.length; ++y) for (let x=0; x<m[y].length; ++x) if (m[y][x] !== 0 && (b[y+o.y] && b[y+o.y][x+o.x]) !== 0) return true;
+    return false;
+}
+function tGetGhostY() {
+    let oy = tPlayer.pos.y; while (!tCollide(tBoard, tPlayer)) tPlayer.pos.y++;
+    let gy = tPlayer.pos.y - 1; tPlayer.pos.y = oy; return gy;
+}
+function tMove(dir) {
+    if(tIsClearing) return; tPlayer.pos.x += dir; tLastAction = 'move';
+    if (tCollide(tBoard, tPlayer)) tPlayer.pos.x -= dir;
+    else {
+        if(tPlayer.pos.y > tLowestY) { tLowestY = tPlayer.pos.y; tMoveResets = 0; }
+        if(tCollide(tBoard, {matrix:tPlayer.matrix, pos:{x:tPlayer.pos.x, y:tPlayer.pos.y+1}}) && tMoveResets<15) { tLockTimer = 0; tMoveResets++; }
+    }
+    emitBoardState();
+}
+function tRotate(dir) {
+    if (tPlayer.type === 4 || tIsClearing) return;
+    let om = tPlayer.matrix.map(r=>[...r]), ox = tPlayer.pos.x, oy = tPlayer.pos.y, os = tPlayer.rot;
+    for(let y=0;y<tPlayer.matrix.length;++y) for(let x=0;x<y;++x) [tPlayer.matrix[x][y], tPlayer.matrix[y][x]] = [tPlayer.matrix[y][x], tPlayer.matrix[x][y]];
+    if(dir>0) tPlayer.matrix.forEach(r=>r.reverse()); else tPlayer.matrix.reverse();
+    let ns = (tPlayer.rot + dir + 4) % 4; let tests = KICK[tPlayer.type===1?'I':'JLSTZ'][`${os}->${ns}`];
+    let rotated = false;
+    for (let i=0; i<tests.length; i++) {
+        tPlayer.pos.x = ox + tests[i][0]; tPlayer.pos.y = oy + tests[i][1];
+        if (!tCollide(tBoard, tPlayer)) { tPlayer.rot = ns; rotated = true; break; }
+    }
+    if (!rotated) { tPlayer.matrix = om; tPlayer.pos.x = ox; tPlayer.pos.y = oy; tPlayer.rot = os; }
+    else {
+        tLastAction = 'rotate'; if(tPlayer.pos.y > tLowestY) { tLowestY = tPlayer.pos.y; tMoveResets = 0; }
+        if(tCollide(tBoard, {matrix:tPlayer.matrix, pos:{x:tPlayer.pos.x, y:tPlayer.pos.y+1}}) && tMoveResets<15) { tLockTimer = 0; tMoveResets++; }
         emitBoardState();
     }
 }
+function tDrop() {
+    tPlayer.pos.y++;
+    if (tCollide(tBoard, tPlayer)) tPlayer.pos.y--; else { tLastAction = 'move'; if(tPlayer.pos.y > tLowestY) { tLowestY = tPlayer.pos.y; tMoveResets = 0; } }
+    dropCounter = 0; emitBoardState();
+}
 
-let dropCounter = 0, dropInterval = 1000, lastTime = 0;
-const activeKeys = {};
-
-function update(time = 0) {
-    if (!isPlaying) { requestAnimationFrame(update); return; }
-    const deltaTime = time - lastTime; lastTime = time;
+function tLock() {
+    if(tIsClearing) return;
+    let isT = (tPlayer.type === 6 && tLastAction === 'rotate'); // 簡易T-Spin判定
+    tPlayer.matrix.forEach((r,y) => r.forEach((v,x) => { if(v!==0 && y+tPlayer.pos.y >=0 && y+tPlayer.pos.y <20) tBoard[y+tPlayer.pos.y][x+tPlayer.pos.x] = v; }));
     
-    if (!isClearing) {
-        dropCounter += deltaTime;
-        if (dropCounter > (activeKeys['ArrowDown'] ? dropInterval / 20 : dropInterval)) playerDrop();
+    tClearLines = []; for(let y=0; y<20; ++y) if(tBoard[y].every(v => v!==0 && v!==8)) tClearLines.push(y);
+    if (tClearLines.length > 0) {
+        tIsClearing = true; let lines = tClearLines.length; let dmg = lines === 4 ? 4 : (isT ? lines * 2 : lines - 1);
+        
+        let isB2BActive = false;
+        if (lines === 4 || (isT && lines > 0)) { 
+            if(tB2B) { dmg++; isB2BActive = true; } 
+            tB2B = true; 
+        } else {
+            tB2B = false; 
+        }
+        
+        if(lines > 0) { tCombo++; if(tCombo>1) dmg += Math.floor(tCombo/2); }
+        if (gameMode === 'multi' && dmg > 0) socket.emit('sendGarbage', { type: 'tetris', amount: dmg });
+        
+        // --- テキスト表示の判定処理 ---
+        let actionMsg = "";
+        if (isT) {
+            const tNames = ["", "SINGLE!", "DOUBLE!", "TRIPLE!"];
+            actionMsg = "T-SPIN\n" + tNames[lines];
+        } else if (lines === 4) {
+            actionMsg = "TETRIS!";
+        } else if (tCombo > 1) {
+            actionMsg = tCombo + " REN";
+        }
+        
+        // B2B継続ボーナス時は文字を追加
+        if (isB2BActive && actionMsg !== "") {
+            actionMsg = "B2B " + actionMsg;
+        }
+        
+        if (actionMsg !== "") showActionText(actionMsg);
+        // ------------------------------
+        
+        setTimeout(() => {
+            tClearLines.forEach(y => { tBoard.splice(y,1); tBoard.unshift(new Array(10).fill(0)); });
+            tApplyGarbage(); tIsClearing = false; tResetPlayer();
+        }, 150);
+    } else { tCombo = 0; tApplyGarbage(); tResetPlayer(); }
+    dropCounter = 0;
+}
 
-        if (collide(board, {matrix: player.matrix, pos: {x:player.pos.x, y:player.pos.y+1}})) {
-            lockTimer += deltaTime;
-            if (lockTimer >= 500) lockPiece();
-        } else { lockTimer = 0; }
+function tApplyGarbage() {
+    if (tPendingGarbage <= 0) return;
+    let causeGO = false;
+    for(let i=0; i<tPendingGarbage; i++) {
+        if(tBoard[0].some(v=>v!==0)) causeGO = true;
+        tBoard.shift(); let gRow = new Array(10).fill(8); gRow[Math.floor(Math.random()*10)] = 0; tBoard.push(gRow);
     }
+    tPendingGarbage = 0; tDraw(); emitBoardState(); if(causeGO) triggerGameOver();
+}
+
+function drawTMatrix(mat, off, ctx, isG=false) {
+    if(ctx === oppTCtx) { ctx.fillStyle='#000'; ctx.fillRect(0,0,10,20); }
+    mat.forEach((r,y) => r.forEach((v,x) => {
+        if(v!==0) {
+            let val = v>10?v-10:v; ctx.fillStyle = (isG||v>10) ? T_COLORS[val]+'40' : T_COLORS[val];
+            ctx.strokeStyle = (isG||v>10) ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.5)';
+            ctx.fillRect(x+off.x, y+off.y, 1, 1); ctx.lineWidth=0.05; ctx.strokeRect(x+off.x, y+off.y, 1, 1);
+        }
+    }));
+}
+function tDraw() {
+    tCtx.fillStyle='#000'; tCtx.fillRect(0,0,240,480);
+    tBoard.forEach((r,y) => { if(tIsClearing && tClearLines.includes(y)) { tCtx.fillStyle='#fff'; tCtx.fillRect(0,y,10,1); } else drawTMatrix([r], {x:0,y:y}, tCtx); });
+    if(tPlayer.matrix && isPlaying && !tIsClearing) { drawTMatrix(tPlayer.matrix, {x:tPlayer.pos.x, y:tGetGhostY()}, tCtx, true); drawTMatrix(tPlayer.matrix, tPlayer.pos, tCtx); }
+    tHoldCtx.fillStyle='#111'; tHoldCtx.fillRect(0,0,60,60);
+    if(tHoldType) { let m=SHAPES[tHoldType], xo=(4-m[0].length)/2 + (tHoldType===4?0.5:0), yo=(4-m.length)/2 - (tHoldType===1?0.5:0); m.forEach((r,y)=>r.forEach((v,x)=>{ if(v!==0){ tHoldCtx.fillStyle=T_COLORS[v]; tHoldCtx.fillRect(x+xo,y+yo,1,1); } })); }
+    tNextCtx.fillStyle='#111'; tNextCtx.fillRect(0,0,60,240);
+    tNextQ.forEach((t,i) => { let m=SHAPES[t], xo=(4-m[0].length)/2 + (t===4?0.5:0), yo=i*4+(4-m.length)/2 - (t===1?0.5:0); m.forEach((r,y)=>r.forEach((v,x)=>{ if(v!==0){ tNextCtx.fillStyle=T_COLORS[v]; tNextCtx.fillRect(x+xo,y+yo,1,1); } })); });
+}
+
+// ---------------------------
+// 共通入力・ループ
+// ---------------------------
+let dropCounter = 0, dropInterval = 1000, lastTime = 0; const activeKeys = {};
+function update(time = 0) {
+    if (!isPlaying) return;
+    let dt = time - lastTime; lastTime = time;
     
-    draw(); requestAnimationFrame(update);
+    if (selectedGame === 'puyo') {
+        if (!pIsClearing) {
+            dropCounter += dt; if (dropCounter > (activeKeys['ArrowDown'] ? dropInterval/20 : dropInterval)) pDrop();
+        }
+        pDraw();
+    } else {
+        if (!tIsClearing) {
+            dropCounter += dt; if (dropCounter > (activeKeys['ArrowDown'] ? dropInterval/20 : dropInterval)) tDrop();
+            if (tCollide(tBoard, {matrix:tPlayer.matrix, pos:{x:tPlayer.pos.x, y:tPlayer.pos.y+1}})) {
+                tLockTimer += dt; if (tLockTimer >= 500) tLock();
+            } else tLockTimer = 0;
+        }
+        tDraw();
+    }
+    requestAnimationFrame(update);
 }
 
 document.addEventListener('keydown', e => {
-    if (!isPlaying || isClearing) return;
+    if (!isPlaying) return;
     activeKeys[e.code] = true;
     if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"].includes(e.code)) e.preventDefault();
-    switch(e.code) {
-        case 'ArrowLeft': playerMove(-1); break;
-        case 'ArrowRight': playerMove(1); break;
-        case 'ArrowUp': player.pos.y = getGhostY(); lastAction = 'move'; lockPiece(); break;
-        case 'Space': holdPiece(); break;
-        case 'KeyX': playerRotate(1); break;
-        case 'KeyZ': playerRotate(-1); break;
+    if (selectedGame === 'puyo' && !pIsClearing) {
+        switch(e.code) { case 'ArrowLeft': pMove(-1); break; case 'ArrowRight': pMove(1); break; case 'KeyX': pRotate(1); break; case 'KeyZ': pRotate(-1); break; }
+    } else if (selectedGame === 'tetris' && !tIsClearing) {
+        switch(e.code) { case 'ArrowLeft': tMove(-1); break; case 'ArrowRight': tMove(1); break; case 'KeyX': tRotate(1); break; case 'KeyZ': tRotate(-1); break; case 'Space': tHold(); break; case 'ArrowUp': tPlayer.pos.y = tGetGhostY(); tLock(); break; }
     }
 });
 document.addEventListener('keyup', e => activeKeys[e.code] = false);
 
-function bindBtn(id, action, pressAction) {
-    const el = document.getElementById(id);
-    let intv;
-    const start = (e) => { e.preventDefault(); if(isPlaying && !isClearing) { pressAction(); if(action === 'ArrowDown') activeKeys['ArrowDown'] = true; else intv = setInterval(pressAction, 120); } };
-    const end = (e) => { e.preventDefault(); clearInterval(intv); if(action === 'ArrowDown') activeKeys['ArrowDown'] = false; };
+function bindBtn(id, action, pCb, tCb) {
+    const el = document.getElementById(id); let timeout, interval;
+    const start = (e) => {
+        e.preventDefault();
+        if(isPlaying && !((selectedGame==='puyo'&&pIsClearing)||(selectedGame==='tetris'&&tIsClearing))) {
+            if(selectedGame==='puyo'&&pCb) pCb(); else if(selectedGame==='tetris'&&tCb) tCb();
+            if(action==='ArrowDown') activeKeys['ArrowDown']=true;
+            else { clearTimeout(timeout); clearInterval(interval); timeout = setTimeout(() => { interval = setInterval(() => { if(selectedGame==='puyo'&&pCb) pCb(); else if(selectedGame==='tetris'&&tCb) tCb(); }, 40); }, 150); }
+        }
+    };
+    const end = (e) => { e.preventDefault(); clearTimeout(timeout); clearInterval(interval); if(action==='ArrowDown') activeKeys['ArrowDown']=false; };
     el.addEventListener('touchstart', start); el.addEventListener('touchend', end);
     el.addEventListener('mousedown', start); el.addEventListener('mouseup', end); el.addEventListener('mouseleave', end);
 }
-bindBtn('btn-left', 'ArrowLeft', () => playerMove(-1));
-bindBtn('btn-right', 'ArrowRight', () => playerMove(1));
-bindBtn('btn-soft', 'ArrowDown', () => {});
-bindBtn('btn-hard', 'ArrowUp', () => { if(!isClearing) { player.pos.y = getGhostY(); lastAction = 'move'; lockPiece(); } });
-bindBtn('btn-ccw', 'KeyZ', () => playerRotate(-1));
-bindBtn('btn-cw', 'KeyX', () => playerRotate(1));
-bindBtn('btn-hold', 'Space', () => holdPiece());
-
-drawMatrix(board, {x:0, y:0}, oppCtx);
+bindBtn('btn-left', 'ArrowLeft', () => pMove(-1), () => tMove(-1));
+bindBtn('btn-right', 'ArrowRight', () => pMove(1), () => tMove(1));
+bindBtn('btn-soft', 'ArrowDown', ()=>{}, ()=>{});
+bindBtn('btn-ccw', 'KeyZ', () => pRotate(-1), () => tRotate(-1));
+bindBtn('btn-cw', 'KeyX', () => pRotate(1), () => tRotate(1));
+bindBtn('btn-hold', 'Space', null, () => tHold());
+bindBtn('btn-hard', 'ArrowUp', null, () => { if(!tIsClearing) { tPlayer.pos.y = tGetGhostY(); tLock(); }});
 </script>
 </body>
 </html>
