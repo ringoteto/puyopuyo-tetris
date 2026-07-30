@@ -66,9 +66,13 @@
             100% { opacity: 0; transform: translate(-50%, -70%); }
         }
 
-        #mobile-controls { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 15px; width: 100%; max-width: 400px; }
+        /* スマホ用操作ボタン */
+        #mobile-controls {
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 15px;
+            margin-bottom: max(20px, env(safe-area-inset-bottom)); width: 100%; max-width: 400px;
+        }
         .m-btn {
-            background: #333; color: #fff; border: 2px solid #555; padding: 15px 0; border-radius: 8px;
+            background: #333; color: #fff; border: 2px solid #555; padding: 14px 0; border-radius: 8px;
             font-size: 16px; font-weight: bold; user-select: none; touch-action: manipulation; text-align: center; cursor: pointer;
         }
         .m-btn:active { background: #555; }
@@ -76,7 +80,17 @@
         kbd { background-color: #444; padding: 2px 5px; border-radius: 4px; }
         
         .hidden { display: none !important; }
-        @media (min-width: 768px) { #mobile-controls { display: none; } }
+
+        /* レスポンシブ表示設定 */
+        @media (max-width: 767px) {
+            /* スマホ画面では対戦相手の画面を隠して自分の画面を広く保つ */
+            #opponent-container, .opponent-area {
+                display: none !important;
+            }
+        }
+        @media (min-width: 768px) {
+            #mobile-controls { display: none; }
+        }
     </style>
 </head>
 <body>
@@ -130,7 +144,7 @@
             </div>
         </div>
 
-        <!-- 相手エリア -->
+        <!-- 相手エリア (PC等の広い画面のみ表示) -->
         <div class="opponent-area hidden" id="opponent-container">
             <h3 style="margin:5px;">あいて</h3>
             <canvas id="opp-t-board" width="240" height="480" style="display:none;"></canvas>
@@ -138,13 +152,14 @@
         </div>
     </div>
     
+    <!-- スマホ操作ボタン（HOLDを最上段に配置） -->
     <div id="mobile-controls" class="hidden">
+        <div class="m-btn t-only" id="btn-hold" style="grid-column: span 4; background: #00838f;">HOLD</div>
         <div class="m-btn" id="btn-left">←</div>
         <div class="m-btn" id="btn-right">→</div>
         <div class="m-btn" id="btn-ccw">左回転(Z)</div>
         <div class="m-btn" id="btn-cw">右回転(X)</div>
-        <div class="m-btn t-only" id="btn-hold">HOLD</div>
-        <div class="m-btn" id="btn-soft">↓(ソフト)</div>
+        <div class="m-btn" id="btn-soft" style="grid-column: span 2;">↓(ソフト)</div>
         <div class="m-btn t-only" id="btn-hard" style="grid-column: span 2; background: #c62828;">HARD DROP</div>
     </div>
 
@@ -160,7 +175,7 @@ let isGameStarted = false;
 let selectedGame = null;
 
 // 長押し移動設定 (DAS: 貯め時間 / ARR: 移動速度)
-const DAS_DELAY = 90; // 長押し開始までの貯め時間 (ミリ秒) - 150から90へ短縮
+const DAS_DELAY = 90; // 長押し開始までの貯め時間 (ミリ秒)
 const ARR_RATE = 30;   // 長押し中の移動間隔 (ミリ秒)
 
 // ---------------------------
@@ -713,7 +728,7 @@ function update(time = 0) {
     requestAnimationFrame(update);
 }
 
-// キーボード操作用の独自DAS/ARR管理
+// キーボード操作用のDAS/ARR管理
 const keyTimers = {};
 function handleKeyRepeat(code, moveFn) {
     moveFn();
