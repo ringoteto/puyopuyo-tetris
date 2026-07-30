@@ -159,6 +159,10 @@ let isPlaying = false;
 let isGameStarted = false;
 let selectedGame = null;
 
+// 長押し移動設定 (DAS: 貯め時間 / ARR: 移動速度)
+const DAS_DELAY = 90; // 長押し開始までの貯め時間 (ミリ秒) - 150から90へ短縮
+const ARR_RATE = 30;   // 長押し中の移動間隔 (ミリ秒)
+
 // ---------------------------
 // システム管理・UI統合
 // ---------------------------
@@ -244,7 +248,6 @@ if (socket) {
         isPlaying = false; isGameStarted = false; document.getElementById('end-menu').style.display = 'block';
     });
     
-    // 相手の盤面描画
     socket.on('opponentBoard', (data) => {
         if (!data || !data.type) return;
         if (data.type === 'puyo') {
@@ -265,19 +268,15 @@ if (socket) {
         }
     });
     
-    // 異種格闘戦対応：公式レート近似
     socket.on('receiveGarbage', (data) => {
         if (!isPlaying) return;
         let amount = data.amount;
-        
         if (data.type === 'tetris' && selectedGame === 'puyo') {
             const tToP_rate = [0, 3, 6, 9, 16, 21, 24, 29, 34, 39, 44, 49, 54];
             amount = tToP_rate[amount] !== undefined ? tToP_rate[amount] : Math.floor(amount * 4.5);
-        } 
-        else if (data.type === 'puyo' && selectedGame === 'tetris') {
+        } else if (data.type === 'puyo' && selectedGame === 'tetris') {
             amount = Math.floor(amount / 5);
         }
-        
         if (amount > 0) {
             if (selectedGame === 'puyo') pPendingGarbage += amount;
             else tPendingGarbage += amount;
@@ -529,7 +528,7 @@ const T_COLORS = [ null, '#00FFFF', '#0000FF', '#FFA500', '#FFFF00', '#00FF00', 
 const SHAPES = [ [], [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]], [[2,0,0],[2,2,2],[0,0,0]], [[0,0,3],[3,3,3],[0,0,0]], [[4,4],[4,4]], [[0,5,5],[5,5,0],[0,0,0]], [[0,6,0],[6,6,6],[0,0,0]], [[7,7,0],[0,7,7],[0,0,0]] ];
 const KICK = {
     'JLSTZ': {'0->1':[[0,0],[-1,0],[-1,-1],[0,2],[-1,2]],'1->0':[[0,0],[1,0],[1,1],[0,-2],[1,-2]],'1->2':[[0,0],[1,0],[1,1],[0,-2],[1,-2]],'2->1':[[0,0],[-1,0],[-1,-1],[0,2],[-1,2]],'2->3':[[0,0],[1,0],[1,-1],[0,2],[1,2]],'3->2':[[0,0],[-1,0],[-1,1],[0,-2],[-1,-2]],'3->0':[[0,0],[-1,0],[-1,1],[0,-2],[-1,-2]],'0->3':[[0,0],[1,0],[1,-1],[0,2],[1,2]]},
-    'I': {'0->1':[[0,0],[-2,0],[1,0],[-2,1],[1,-2]],'1->0':[[0,0],[2,0],[-1,0],[2,-1],[-1,2]],'1->2':[[0,0],[-1,0],[2,0],[-1,-2],[2,1]],'2->1':[[0,0],[1,0],[-2,0],[1,2],[-2,-1]],'2->3':[[0,0],[2,0],[-1,0],[2,-1],[-1,2]],'3->2':[[0,0],[-2,0],[1,0],[-2,1],[1,-2]],'3->0':[[0,0],[1,0],[-2,0],[1,2],[-2,-1]],'0->3':[[0,0],[-1,0],[2,0],[-1,-2],[2,1]]}
+    'I': {'0->1':[[0,0],[-2,0],[1,0],[-2,1],[1,-2]],'1->0':[[0,0],[2,0],[-1,0],[2,-1],[-1,2]],'1->2':[[0,0],[-1,0],[2,0],[-1,-2],[2,1]],'2->1':[[0,0],[1,0],[-2,0],[1,2],[-2,-1]],'2->3':[[0,0],[2,0],[-1,0],[2,-1],[1,-2]],'3->2':[[0,0],[-2,0],[1,0],[-2,1],[1,-2]],'3->0':[[0,0],[1,0],[-2,0],[1,2],[-2,-1]],'0->3':[[0,0],[-1,0],[2,0],[-1,-2],[2,1]]}
 };
 
 let tBoard = [], tBag = [], tNextQ = [], tHoldType = null, tCanHold = true, tIsClearing = false, tClearLines = [];
@@ -622,7 +621,6 @@ function tLock() {
         
         if(lines > 0) { tCombo++; if(tCombo>1) dmg += Math.floor(tCombo/2); }
         
-        // 修正: 消去されるライン（tClearLines）以外のマスが全て0（空）かチェック
         let isPC = tBoard.every((row, y) => {
             if (tClearLines.includes(y)) return true;
             return row.every(v => v === 0);
@@ -634,7 +632,6 @@ function tLock() {
 
         if (gameMode === 'multi' && dmg > 0) socket.emit('sendGarbage', { type: 'tetris', amount: dmg });
         
-        // 表示テキスト判定
         let actionMsg = "";
         if (isPC) {
             actionMsg = "PERFECT\nCLEAR!";
@@ -716,32 +713,80 @@ function update(time = 0) {
     requestAnimationFrame(update);
 }
 
+// キーボード操作用の独自DAS/ARR管理
+const keyTimers = {};
+function handleKeyRepeat(code, moveFn) {
+    moveFn();
+    clearTimeout(keyTimers[code]?.timeout);
+    clearInterval(keyTimers[code]?.interval);
+    
+    keyTimers[code] = {
+        timeout: setTimeout(() => {
+            keyTimers[code].interval = setInterval(() => {
+                if (activeKeys[code] && isPlaying) moveFn();
+            }, ARR_RATE);
+        }, DAS_DELAY)
+    };
+}
+
 document.addEventListener('keydown', e => {
-    if (!isPlaying) return;
+    if (!isPlaying || e.repeat) return;
     activeKeys[e.code] = true;
     if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"].includes(e.code)) e.preventDefault();
-    if (selectedGame === 'puyo' && !pIsClearing) {
-        switch(e.code) { case 'ArrowLeft': pMove(-1); break; case 'ArrowRight': pMove(1); break; case 'KeyX': pRotate(1); break; case 'KeyZ': pRotate(-1); break; }
-    } else if (selectedGame === 'tetris' && !tIsClearing) {
-        switch(e.code) { case 'ArrowLeft': tMove(-1); break; case 'ArrowRight': tMove(1); break; case 'KeyX': tRotate(1); break; case 'KeyZ': tRotate(-1); break; case 'Space': tHold(); break; case 'ArrowUp': tPlayer.pos.y = tGetGhostY(); tLock(); break; }
+    
+    const isPuyo = (selectedGame === 'puyo');
+    if (isPuyo && !pIsClearing) {
+        switch(e.code) {
+            case 'ArrowLeft': handleKeyRepeat('ArrowLeft', () => pMove(-1)); break;
+            case 'ArrowRight': handleKeyRepeat('ArrowRight', () => pMove(1)); break;
+            case 'KeyX': pRotate(1); break;
+            case 'KeyZ': pRotate(-1); break;
+        }
+    } else if (!isPuyo && !tIsClearing) {
+        switch(e.code) {
+            case 'ArrowLeft': handleKeyRepeat('ArrowLeft', () => tMove(-1)); break;
+            case 'ArrowRight': handleKeyRepeat('ArrowRight', () => tMove(1)); break;
+            case 'KeyX': tRotate(1); break;
+            case 'KeyZ': tRotate(-1); break;
+            case 'Space': tHold(); break;
+            case 'ArrowUp': tPlayer.pos.y = tGetGhostY(); tLock(); break;
+        }
     }
 });
-document.addEventListener('keyup', e => activeKeys[e.code] = false);
+
+document.addEventListener('keyup', e => {
+    activeKeys[e.code] = false;
+    if (keyTimers[e.code]) {
+        clearTimeout(keyTimers[e.code].timeout);
+        clearInterval(keyTimers[e.code].interval);
+        delete keyTimers[e.code];
+    }
+});
 
 function bindBtn(id, action, pCb, tCb) {
     const el = document.getElementById(id); let timeout, interval;
     const start = (e) => {
         e.preventDefault();
         if(isPlaying && !((selectedGame==='puyo'&&pIsClearing)||(selectedGame==='tetris'&&tIsClearing))) {
-            if(selectedGame==='puyo'&&pCb) pCb(); else if(selectedGame==='tetris'&&tCb) tCb();
+            const execute = () => { if(selectedGame==='puyo'&&pCb) pCb(); else if(selectedGame==='tetris'&&tCb) tCb(); };
+            execute();
             if(action==='ArrowDown') activeKeys['ArrowDown']=true;
-            else { clearTimeout(timeout); clearInterval(interval); timeout = setTimeout(() => { interval = setInterval(() => { if(selectedGame==='puyo'&&pCb) pCb(); else if(selectedGame==='tetris'&&tCb) tCb(); }, 40); }, 150); }
+            else {
+                clearTimeout(timeout); clearInterval(interval);
+                timeout = setTimeout(() => {
+                    interval = setInterval(execute, ARR_RATE);
+                }, DAS_DELAY);
+            }
         }
     };
-    const end = (e) => { e.preventDefault(); clearTimeout(timeout); clearInterval(interval); if(action==='ArrowDown') activeKeys['ArrowDown']=false; };
+    const end = (e) => {
+        e.preventDefault(); clearTimeout(timeout); clearInterval(interval);
+        if(action==='ArrowDown') activeKeys['ArrowDown']=false;
+    };
     el.addEventListener('touchstart', start); el.addEventListener('touchend', end);
     el.addEventListener('mousedown', start); el.addEventListener('mouseup', end); el.addEventListener('mouseleave', end);
 }
+
 bindBtn('btn-left', 'ArrowLeft', () => pMove(-1), () => tMove(-1));
 bindBtn('btn-right', 'ArrowRight', () => pMove(1), () => tMove(1));
 bindBtn('btn-soft', 'ArrowDown', ()=>{}, ()=>{});
