@@ -271,12 +271,10 @@ if (socket) {
         let amount = data.amount;
         
         if (data.type === 'tetris' && selectedGame === 'puyo') {
-            // テトリス火力(段) → ぷよぷよ(個数) への変換テーブル
             const tToP_rate = [0, 3, 6, 9, 16, 21, 24, 29, 34, 39, 44, 49, 54];
             amount = tToP_rate[amount] !== undefined ? tToP_rate[amount] : Math.floor(amount * 4.5);
         } 
         else if (data.type === 'puyo' && selectedGame === 'tetris') {
-            // ぷよぷよ火力(個数) → テトリス(段) への変換 (1段＝約5個)
             amount = Math.floor(amount / 5);
         }
         
@@ -607,7 +605,7 @@ function tDrop() {
 
 function tLock() {
     if(tIsClearing) return;
-    let isT = (tPlayer.type === 6 && tLastAction === 'rotate'); // 簡易T-Spin判定
+    let isT = (tPlayer.type === 6 && tLastAction === 'rotate');
     tPlayer.matrix.forEach((r,y) => r.forEach((v,x) => { if(v!==0 && y+tPlayer.pos.y >=0 && y+tPlayer.pos.y <20) tBoard[y+tPlayer.pos.y][x+tPlayer.pos.x] = v; }));
     
     tClearLines = []; for(let y=0; y<20; ++y) if(tBoard[y].every(v => v!==0 && v!==8)) tClearLines.push(y);
@@ -623,11 +621,24 @@ function tLock() {
         }
         
         if(lines > 0) { tCombo++; if(tCombo>1) dmg += Math.floor(tCombo/2); }
+        
+        // 修正: 消去されるライン（tClearLines）以外のマスが全て0（空）かチェック
+        let isPC = tBoard.every((row, y) => {
+            if (tClearLines.includes(y)) return true;
+            return row.every(v => v === 0);
+        });
+
+        if (isPC) {
+            dmg += 10;
+        }
+
         if (gameMode === 'multi' && dmg > 0) socket.emit('sendGarbage', { type: 'tetris', amount: dmg });
         
-        // --- テキスト表示の判定処理 ---
+        // 表示テキスト判定
         let actionMsg = "";
-        if (isT) {
+        if (isPC) {
+            actionMsg = "PERFECT\nCLEAR!";
+        } else if (isT) {
             const tNames = ["", "SINGLE!", "DOUBLE!", "TRIPLE!"];
             actionMsg = "T-SPIN\n" + tNames[lines];
         } else if (lines === 4) {
@@ -636,13 +647,11 @@ function tLock() {
             actionMsg = tCombo + " REN";
         }
         
-        // B2B継続ボーナス時は文字を追加
-        if (isB2BActive && actionMsg !== "") {
+        if (isB2BActive && !isPC && actionMsg !== "") {
             actionMsg = "B2B " + actionMsg;
         }
         
         if (actionMsg !== "") showActionText(actionMsg);
-        // ------------------------------
         
         setTimeout(() => {
             tClearLines.forEach(y => { tBoard.splice(y,1); tBoard.unshift(new Array(10).fill(0)); });
