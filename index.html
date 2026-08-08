@@ -16,7 +16,6 @@
         #btn-reset-top { background-color: #d32f2f; color: #fff; border: none; padding: 6px 12px; border-radius: 4px; font-size: 12px; font-weight: bold; cursor: pointer; }
         #btn-reset-top:hover { background-color: #b71c1c; }
 
-        /* オーバーレイスクリーン */
         .overlay-screen {
             position: absolute; top: 20%; background: #111; padding: 30px; border: 2px solid #555;
             border-radius: 10px; text-align: center; z-index: 20; box-shadow: 0 0 20px rgba(0,0,0,0.8);
@@ -42,7 +41,7 @@
 
         .vs-wrapper { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; }
         .player-area, .opponent-area { display: flex; flex-direction: column; align-items: center; position: relative; }
-        .game-wrapper { display: flex; gap: 10px; align-items: flex-start; }
+        .game-wrapper { display: flex; gap: 10px; align-items: flex-start; margin-top: 15px; }
         
         .side-panel { display: flex; flex-direction: column; align-items: center; background: #111; padding: 5px; border-radius: 8px; border: 2px solid #444; }
         .side-panel h3 { margin: 0 0 5px 0; font-size: 12px; color: #ccc; }
@@ -51,6 +50,12 @@
         canvas { background-color: #000; border: 2px solid #555; box-shadow: 0 0 15px rgba(255, 255, 255, 0.2); }
         .side-panel canvas { border: none; box-shadow: none; }
         
+        /* ぷよ予告おじゃまインジケーター */
+        #p-ojama-indicator {
+            position: absolute; top: -25px; width: 100%; text-align: center;
+            color: #ffeb3b; font-weight: bold; font-size: 16px; text-shadow: 1px 1px 2px #000;
+        }
+
         #action-text, #action-text-puyo {
             position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%);
             color: #ffeb3b; font-size: 24px; font-weight: bold; font-style: italic;
@@ -66,7 +71,6 @@
             100% { opacity: 0; transform: translate(-50%, -70%); }
         }
 
-        /* スマホ用操作ボタン */
         #mobile-controls {
             display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 15px;
             margin-bottom: max(20px, env(safe-area-inset-bottom)); width: 100%; max-width: 400px;
@@ -81,12 +85,8 @@
         
         .hidden { display: none !important; }
 
-        /* レスポンシブ表示設定 */
         @media (max-width: 767px) {
-            /* スマホ画面では対戦相手の画面を隠して自分の画面を広く保つ */
-            #opponent-container, .opponent-area {
-                display: none !important;
-            }
+            #opponent-container, .opponent-area { display: none !important; }
         }
         @media (min-width: 768px) {
             #mobile-controls { display: none; }
@@ -104,14 +104,12 @@
         <button id="btn-rematch">同じペアで続ける</button>
     </div>
 
-    <!-- ゲーム選択 -->
     <div id="game-select-screen" class="overlay-screen">
         <h2>遊ぶゲームを選択</h2>
         <button onclick="selectGame('puyo')">ぷよぷよ</button>
         <button onclick="selectGame('tetris')">テトリス</button>
     </div>
 
-    <!-- モード選択 -->
     <div id="start-screen" class="overlay-screen hidden">
         <h2 id="mode-title">モード選択</h2>
         <button id="btn-solo">ソロプレイ</button>
@@ -126,8 +124,19 @@
         <!-- プレイヤーエリア -->
         <div class="player-area">
             <h3 style="margin:5px;">あなた</h3>
+            
             <div class="game-wrapper" id="tetris-ui" style="display:none;">
-                <div class="side-panel"><h3>HOLD</h3><canvas id="t-hold" width="60" height="60"></canvas></div>
+                <div class="side-panel">
+                    <h3>HOLD</h3><canvas id="t-hold" width="60" height="60"></canvas>
+                    <!-- 異種戦専用 ATKゲージ -->
+                    <div id="t-atk-wrapper" style="display:none; flex-direction:column; align-items:center; margin-top:20px;">
+                        <h3 style="color:#ff5252; margin-bottom:0;">ATK</h3>
+                        <div id="t-atk-text" style="font-size:20px; font-weight:bold; color:white; margin:5px 0;">0</div>
+                        <div style="width:15px; height:100px; background:#222; border:1px solid #555; position:relative;">
+                            <div id="t-atk-bar" style="width:100%; height:0%; background:#ff5252; position:absolute; bottom:0; transition: height 0.2s;"></div>
+                        </div>
+                    </div>
+                </div>
                 <div class="main-board-container">
                     <canvas id="t-board" width="240" height="480"></canvas>
                     <div id="action-text"></div>
@@ -136,7 +145,8 @@
             </div>
 
             <div class="game-wrapper" id="puyo-ui" style="display:none;">
-                <div class="main-board-container">
+                <div class="main-board-container" style="margin-top:15px;">
+                    <div id="p-ojama-indicator"></div>
                     <canvas id="p-board" width="144" height="312"></canvas>
                     <div id="action-text-puyo"></div>
                 </div>
@@ -144,15 +154,14 @@
             </div>
         </div>
 
-        <!-- 相手エリア (PC等の広い画面のみ表示) -->
+        <!-- 相手エリア -->
         <div class="opponent-area hidden" id="opponent-container">
             <h3 style="margin:5px;">あいて</h3>
             <canvas id="opp-t-board" width="240" height="480" style="display:none;"></canvas>
-            <canvas id="opp-p-board" width="144" height="312" style="display:none;"></canvas>
+            <canvas id="opp-p-board" width="144" height="312" style="display:none; margin-top:15px;"></canvas>
         </div>
     </div>
     
-    <!-- スマホ操作ボタン（HOLDを最上段に配置） -->
     <div id="mobile-controls" class="hidden">
         <div class="m-btn t-only" id="btn-hold" style="grid-column: span 4; background: #00838f;">HOLD</div>
         <div class="m-btn" id="btn-left">←</div>
@@ -164,7 +173,7 @@
     </div>
 
     <div class="controls hidden" id="keyboard-controls">
-        <p><kbd>←</kbd> <kbd>→</kbd>: 移動 | <kbd>↓</kbd>: ソフト/高速 | <kbd>X</kbd>: 右回転 | <kbd>Z</kbd>: 左回転<span class="t-only"> | <kbd>↑</kbd>: ハード | <kbd>Space</kbd>: ホールド</span></p>
+        <p><kbd>←</kbd> <kbd>→</kbd>: 移動 | <kbd>↓</kbd>: ソフト | <kbd>X</kbd>: 右回転 | <kbd>Z</kbd>: 左回転<span class="t-only"> | <kbd>↑</kbd>: ハード | <kbd>Space</kbd>: ホールド</span></p>
     </div>
 
 <script>
@@ -173,14 +182,11 @@ let gameMode = 'solo';
 let isPlaying = false;
 let isGameStarted = false;
 let selectedGame = null;
+let oppGameType = null;
 
-// 長押し移動設定 (DAS: 貯め時間 / ARR: 移動速度)
-const DAS_DELAY = 90; // 長押し開始までの貯め時間 (ミリ秒)
-const ARR_RATE = 30;   // 長押し中の移動間隔 (ミリ秒)
+const DAS_DELAY = 90;
+const ARR_RATE = 30;
 
-// ---------------------------
-// システム管理・UI統合
-// ---------------------------
 document.getElementById('btn-reset-top').addEventListener('click', () => location.reload());
 
 function selectGame(game) {
@@ -265,6 +271,11 @@ if (socket) {
     
     socket.on('opponentBoard', (data) => {
         if (!data || !data.type) return;
+        if (oppGameType !== data.type) {
+            oppGameType = data.type;
+            if (selectedGame === 'tetris') updateTetrisAtkGauge();
+        }
+
         if (data.type === 'puyo') {
             document.getElementById('opp-p-board').style.display = 'block';
             document.getElementById('opp-t-board').style.display = 'none';
@@ -285,22 +296,24 @@ if (socket) {
     
     socket.on('receiveGarbage', (data) => {
         if (!isPlaying) return;
-        let amount = data.amount;
-        if (data.type === 'tetris' && selectedGame === 'puyo') {
-            const tToP_rate = [0, 3, 6, 9, 16, 21, 24, 29, 34, 39, 44, 49, 54];
-            amount = tToP_rate[amount] !== undefined ? tToP_rate[amount] : Math.floor(amount * 4.5);
-        } else if (data.type === 'puyo' && selectedGame === 'tetris') {
-            amount = Math.floor(amount / 5);
-        }
-        if (amount > 0) {
-            if (selectedGame === 'puyo') pPendingGarbage += amount;
-            else tPendingGarbage += amount;
+        
+        if (selectedGame === 'puyo') {
+            pPendingGarbage += data.amount;
+            updatePuyoGarbageUI();
+        } else if (selectedGame === 'tetris') {
+            if (data.isOjama) {
+                tPendingAtk += data.amount;
+                updateTetrisAtkGauge();
+            } else {
+                tPendingGarbage += data.amount;
+            }
         }
     });
 }
 
 function startGame() {
     isPlaying = true; isGameStarted = true;
+    oppGameType = null;
     document.getElementById('status-msg').innerText = (gameMode === 'solo') ? "ソロプレイ" : "対戦スタート！";
     if (selectedGame === 'puyo') startPuyo();
     else startTetris();
@@ -361,9 +374,15 @@ let pBoard = [], pNextQueue = [], pPendingGarbage = 0, pCombo = 0, pScoreRemaind
 let pIsClearing = false;
 let pPlayer = { pos: {x: 2, y: 1}, c1: 0, c2: 0, rot: 0 };
 
+function updatePuyoGarbageUI() {
+    const el = document.getElementById('p-ojama-indicator');
+    if (el) el.innerText = pPendingGarbage > 0 ? '予告: ' + pPendingGarbage : '';
+}
+
 function startPuyo() {
     pBoard = Array.from({length: 13}, () => new Array(6).fill(0));
     pNextQueue = []; pPendingGarbage = 0; pCombo = 0; pScoreRemainder = 0; pChainOjama = 0; pIsClearing = false;
+    updatePuyoGarbageUI();
     for(let i=0; i<3; i++) pNextQueue.push({ c1: Math.floor(Math.random()*4)+1, c2: Math.floor(Math.random()*4)+1 });
     pResetPlayer();
 }
@@ -470,8 +489,21 @@ function pFindMatches() {
         let col = uniqueColors.size; let colorBonus = col === 1 ? 0 : (col === 2 ? 3 : (col === 3 ? 6 : 12));
         let ch = CHAIN_POWER[Math.min(pCombo, CHAIN_POWER.length - 1)] || 0;
         let mult = ch + cbSum + colorBonus; if (mult === 0) mult = 1;
+        
         pScoreRemainder += total * 10 * mult;
-        pChainOjama += Math.floor(pScoreRemainder / 70); pScoreRemainder %= 70;
+        
+        // ぷよぷよ火力表準拠：70点で1おじゃま（予告）
+        let generatedOjama = Math.floor(pScoreRemainder / 70);
+        pScoreRemainder %= 70;
+        if (generatedOjama > 0) {
+            if (pPendingGarbage > 0) {
+                let offset = Math.min(generatedOjama, pPendingGarbage);
+                pPendingGarbage -= offset;
+                generatedOjama -= offset;
+                updatePuyoGarbageUI();
+            }
+            pChainOjama += generatedOjama;
+        }
     }
     return matched;
 }
@@ -483,8 +515,12 @@ function pProcessChain() {
             pCombo++; showActionText(pCombo + " 連鎖！"); pDraw(); emitBoardState();
             setTimeout(() => pProcessChain(), 300);
         } else {
-            if (pChainOjama > 0 && gameMode === 'multi') socket.emit('sendGarbage', { type: 'puyo', amount: pChainOjama });
-            pCombo = 0; pChainOjama = 0; pApplyGarbage(); pIsClearing = false;
+            if (pChainOjama > 0 && gameMode === 'multi') {
+                socket.emit('sendGarbage', { amount: pChainOjama, isOjama: true });
+            }
+            pCombo = 0; pChainOjama = 0; 
+            pApplyGarbage(); 
+            pIsClearing = false;
             if (pBoard[1][2] !== 0) { pDraw(); triggerGameOver(); } else pResetPlayer();
         }
     }, moved ? 200 : 50);
@@ -492,9 +528,13 @@ function pProcessChain() {
 
 function pApplyGarbage() {
     if (pPendingGarbage <= 0) return;
-    let total = pPendingGarbage; pPendingGarbage = 0;
-    while (total > 0) {
-        let dc = Math.min(total, 6); total -= dc;
+    let total = pPendingGarbage;
+    let dropAmount = Math.min(total, 30);
+    pPendingGarbage = total - dropAmount; 
+    updatePuyoGarbageUI();
+    
+    while (dropAmount > 0) {
+        let dc = Math.min(dropAmount, 6); dropAmount -= dc;
         let cols = [0, 1, 2, 3, 4, 5].sort(() => Math.random() - 0.5);
         for (let i = 0; i < dc; i++) {
             let col = cols[i], y = 0;
@@ -548,11 +588,25 @@ const KICK = {
 
 let tBoard = [], tBag = [], tNextQ = [], tHoldType = null, tCanHold = true, tIsClearing = false, tClearLines = [];
 let tPlayer = { pos: {x:0, y:0}, matrix: null, type: 0, rot: 0 };
-let tLockTimer = 0, tMoveResets = 0, tLowestY = 0, tPendingGarbage = 0, tLastAction = null, tCombo = 0, tB2B = false;
+let tLockTimer = 0, tMoveResets = 0, tLowestY = 0, tPendingGarbage = 0, tPendingAtk = 0, tLastAction = null, tCombo = 0, tB2B = false;
+
+function updateTetrisAtkGauge() {
+    let wrapper = document.getElementById('t-atk-wrapper');
+    if (oppGameType === 'puyo') {
+        wrapper.style.display = 'flex';
+        document.getElementById('t-atk-text').innerText = tPendingAtk;
+        let pct = Math.min(100, (tPendingAtk / 50) * 100); 
+        document.getElementById('t-atk-bar').style.height = pct + '%';
+    } else {
+        wrapper.style.display = 'none';
+    }
+}
 
 function startTetris() {
     tBoard = Array.from({length: 20}, () => new Array(10).fill(0));
-    tBag = []; tNextQ = []; tHoldType = null; tCombo = 0; tB2B = false; tPendingGarbage = 0; tIsClearing = false;
+    tBag = []; tNextQ = []; tHoldType = null; tCombo = 0; tB2B = false; 
+    tPendingGarbage = 0; tPendingAtk = 0; tIsClearing = false;
+    updateTetrisAtkGauge();
     for(let i=0; i<5; i++) tNextQ.push(tPullBag()); tResetPlayer();
 }
 function tPullBag() {
@@ -623,64 +677,124 @@ function tLock() {
     tPlayer.matrix.forEach((r,y) => r.forEach((v,x) => { if(v!==0 && y+tPlayer.pos.y >=0 && y+tPlayer.pos.y <20) tBoard[y+tPlayer.pos.y][x+tPlayer.pos.x] = v; }));
     
     tClearLines = []; for(let y=0; y<20; ++y) if(tBoard[y].every(v => v!==0 && v!==8)) tClearLines.push(y);
+    
     if (tClearLines.length > 0) {
-        tIsClearing = true; let lines = tClearLines.length; let dmg = lines === 4 ? 4 : (isT ? lines * 2 : lines - 1);
+        tIsClearing = true; let lines = tClearLines.length;
         
         let isB2BActive = false;
         if (lines === 4 || (isT && lines > 0)) { 
-            if(tB2B) { dmg++; isB2BActive = true; } 
+            if(tB2B) { isB2BActive = true; } 
             tB2B = true; 
         } else {
             tB2B = false; 
         }
         
-        if(lines > 0) { tCombo++; if(tCombo>1) dmg += Math.floor(tCombo/2); }
+        tCombo++; 
         
         let isPC = tBoard.every((row, y) => {
             if (tClearLines.includes(y)) return true;
             return row.every(v => v === 0);
         });
 
-        if (isPC) {
-            dmg += 10;
-        }
+        if (gameMode === 'multi') {
+            if (oppGameType === 'puyo') {
+                // テトリス火力表準拠（対ぷよ異種戦ATKテーブル）
+                let pOjama = 0;
+                if (isPC) pOjama += 30;
+                else if (isT) {
+                    if (lines === 1) pOjama += 4;
+                    else if (lines === 2) pOjama += 10;
+                    else if (lines === 3) pOjama += 16;
+                } else {
+                    if (lines === 2) pOjama += 2;
+                    else if (lines === 3) pOjama += 4;
+                    else if (lines === 4) pOjama += 14;
+                }
+                if (isB2BActive) {
+                    if (lines === 4) pOjama += 3;
+                    else if (isT && lines === 2) pOjama += 3;
+                    else if (isT && lines === 3) pOjama += 4;
+                    else pOjama += 2;
+                }
+                const renBonus = [0, 0, 1, 2, 3, 4, 5, 7, 9, 11, 13];
+                pOjama += renBonus[Math.min(tCombo, 10)] || 15;
+                
+                if (pOjama > 0) {
+                    if (tPendingAtk > 0) {
+                        let offset = Math.min(pOjama, tPendingAtk);
+                        tPendingAtk -= offset;
+                        pOjama -= offset;
+                        updateTetrisAtkGauge();
+                    }
+                    if (pOjama > 0) socket.emit('sendGarbage', { amount: pOjama, isOjama: true });
+                }
+            } else {
+                // 同種戦(対テトリス)用テーブル
+                let tDmg = 0;
+                if (isPC) tDmg += 10;
+                else if (isT) {
+                    if (lines === 1) tDmg += 2;
+                    else if (lines === 2) tDmg += 4;
+                    else if (lines === 3) tDmg += 6;
+                } else {
+                    if (lines === 4) tDmg += 4;
+                    else if (lines > 0) tDmg += lines - 1;
+                }
+                if (isB2BActive && (lines === 4 || isT)) tDmg += 1;
+                if (tCombo > 1) tDmg += Math.floor(tCombo / 2);
 
-        if (gameMode === 'multi' && dmg > 0) socket.emit('sendGarbage', { type: 'tetris', amount: dmg });
+                if (tDmg > 0) {
+                    if (tPendingGarbage > 0) {
+                        let offset = Math.min(tDmg, tPendingGarbage);
+                        tPendingGarbage -= offset;
+                        tDmg -= offset;
+                    }
+                    if (tDmg > 0) socket.emit('sendGarbage', { amount: tDmg, isOjama: false });
+                }
+            }
+        }
         
         let actionMsg = "";
-        if (isPC) {
-            actionMsg = "PERFECT\nCLEAR!";
-        } else if (isT) {
-            const tNames = ["", "SINGLE!", "DOUBLE!", "TRIPLE!"];
-            actionMsg = "T-SPIN\n" + tNames[lines];
-        } else if (lines === 4) {
-            actionMsg = "TETRIS!";
-        } else if (tCombo > 1) {
-            actionMsg = tCombo + " REN";
-        }
+        if (isPC) actionMsg = "PERFECT\nCLEAR!";
+        else if (isT) actionMsg = "T-SPIN\n" + ["", "SINGLE!", "DOUBLE!", "TRIPLE!"][lines];
+        else if (lines === 4) actionMsg = "TETRIS!";
+        else if (tCombo > 1) actionMsg = tCombo + " REN";
         
-        if (isB2BActive && !isPC && actionMsg !== "") {
-            actionMsg = "B2B " + actionMsg;
-        }
-        
+        if (isB2BActive && !isPC && actionMsg !== "") actionMsg = "B2B " + actionMsg;
         if (actionMsg !== "") showActionText(actionMsg);
         
         setTimeout(() => {
             tClearLines.forEach(y => { tBoard.splice(y,1); tBoard.unshift(new Array(10).fill(0)); });
             tApplyGarbage(); tIsClearing = false; tResetPlayer();
         }, 150);
-    } else { tCombo = 0; tApplyGarbage(); tResetPlayer(); }
+    } else { 
+        tCombo = 0; tApplyGarbage(); tResetPlayer(); 
+    }
     dropCounter = 0;
 }
 
 function tApplyGarbage() {
-    if (tPendingGarbage <= 0) return;
+    let linesToDrop = 0;
+    
+    if (oppGameType === 'puyo') {
+        linesToDrop = Math.floor(tPendingAtk / 5);
+        if (linesToDrop > 0) {
+            tPendingAtk -= linesToDrop * 5;
+            updateTetrisAtkGauge();
+        }
+    } else {
+        linesToDrop = tPendingGarbage;
+        tPendingGarbage = 0;
+    }
+
+    if (linesToDrop <= 0) return;
+    
     let causeGO = false;
-    for(let i=0; i<tPendingGarbage; i++) {
+    for(let i=0; i<linesToDrop; i++) {
         if(tBoard[0].some(v=>v!==0)) causeGO = true;
         tBoard.shift(); let gRow = new Array(10).fill(8); gRow[Math.floor(Math.random()*10)] = 0; tBoard.push(gRow);
     }
-    tPendingGarbage = 0; tDraw(); emitBoardState(); if(causeGO) triggerGameOver();
+    tDraw(); emitBoardState(); if(causeGO) triggerGameOver();
 }
 
 function drawTMatrix(mat, off, ctx, isG=false) {
@@ -728,13 +842,10 @@ function update(time = 0) {
     requestAnimationFrame(update);
 }
 
-// キーボード操作用のDAS/ARR管理
 const keyTimers = {};
 function handleKeyRepeat(code, moveFn) {
     moveFn();
-    clearTimeout(keyTimers[code]?.timeout);
-    clearInterval(keyTimers[code]?.interval);
-    
+    clearTimeout(keyTimers[code]?.timeout); clearInterval(keyTimers[code]?.interval);
     keyTimers[code] = {
         timeout: setTimeout(() => {
             keyTimers[code].interval = setInterval(() => {
@@ -788,9 +899,7 @@ function bindBtn(id, action, pCb, tCb) {
             if(action==='ArrowDown') activeKeys['ArrowDown']=true;
             else {
                 clearTimeout(timeout); clearInterval(interval);
-                timeout = setTimeout(() => {
-                    interval = setInterval(execute, ARR_RATE);
-                }, DAS_DELAY);
+                timeout = setTimeout(() => { interval = setInterval(execute, ARR_RATE); }, DAS_DELAY);
             }
         }
     };
